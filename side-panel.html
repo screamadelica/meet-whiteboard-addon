@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://www.gstatic.com/meetjs/addons/1.1.0/meet.addons.js"></script>
+</head>
+<body style="font-family: sans-serif; padding: 10px;">
+    <h3>Hello World Add-on</h3>
+    <button id="launch-btn">Launch Main Stage</button>
+
+    <script>
+        async function init() {
+            try {
+                console.log("1. Starting stable SDK...");
+                
+                // 2. Note the singular "addon" and the required cloudProjectNumber
+                const session = await window.meet.addon.createAddonSession({
+                    cloudProjectNumber: "547958960288" // A dummy number works fine for local bypass testing
+                });
+                console.log("2. Session created!");
+                
+                // 3. New method name for the client
+                const sidePanelClient = await session.createSidePanelClient();
+                
+                document.getElementById('launch-btn').onclick = async () => {
+                    console.log("3. Launching Main Stage!");
+                    await sidePanelClient.startActivity({
+                        // 4. Note it is mainStageUrl now, not mainStageUri
+                        mainStageUrl: window.location.origin + '/main-stage.html'
+                    });
+                };
+            } catch (error) {
+                console.error("SDK Initialization FAILED:", error);
+            }
+        }
+        
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PIN-Protected Shared Canvas</title>
+    <script src="https://www.gstatic.com/meetjs/addons/1.1.0/meet.addons.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #e8eaed; display: flex; flex-direction: column; align-items: center; }
+        
+        /* Lobby Styles */
+        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; margin-top: 40px; }
+        .card input, .card button { padding: 10px; margin: 5px; font-size: 16px; border-radius: 4px; }
+        
+        /* Canvas Screen Styles */
+        .header { text-align: center; margin-bottom: 10px; }
+        #status-text { color: #5f6368; font-style: italic; font-size: 0.9em; }
+        
+        #drawing-board {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            cursor: crosshair;
+            border: 2px solid #dadce0;
+        }
+        
+        .controls { margin-top: 15px; display: flex; gap: 10px; align-items: center; justify-content: center; }
+        button { background: #4285F4; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #3367D6; }
+    </style>
+</head>
+<body>
+
+    <div id="lobby-screen" class="card">
+        <h2 style="color: #4285F4;">Collaborative Whiteboard</h2>
+        <p>Start a new board, or join an existing one.</p>
+        <button id="host-btn" style="background: #0F9D58;">Create New Board</button>
+        
+        <hr style="margin: 20px 0; border: 1px solid #eee;">
+        
+        <input type="text" id="join-pin" placeholder="Enter 4-Digit PIN" style="width: 150px; text-align: center;">
+        <br>
+        <button id="join-btn">Join Board</button>
+    </div>
+
+    <div id="canvas-screen" style="display: none;">
+        <div class="header">
+            <h2 style="color: #4285F4; margin: 0;">Room PIN: <span id="display-pin" style="color: #0F9D58;"></span></h2>
+            <p id="status-text">Waiting for peers...</p>
+        </div>
+
+        <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 10px;">
+            <div style="text-align: center; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold;">Draw from Phone!</p>
+                <img id="qr-code" src="" alt="Waiting for ID..." style="width: 120px; height: 120px; display: none;">
+            </div>
+            
+            <canvas id="drawing-board" width="600" height="400"></canvas>
+        </div>
+
+        <div class="controls">
+            <label><b>My Color:</b></label>
+            <input type="color" id="color-picker" value="#4285F4">
+            <button id="clear-btn" style="background: #ea4335;">Clear Board</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. GLOBALS & SETUP ---
+        let peer = null;
+        let activeConnections = []; 
+        const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
+        
+        // Canvas Setup
+        const canvas = document.getElementById('drawing-board');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0; let lastY = 0;
+
+        // --- 2. GOOGLE MEET SDK INITIALIZATION ---
+        async function init() {
+            try {
+                // Keep the Meet SDK initialized so the iframe doesn't crash
+                const session = await window.meet.addon.createAddonSession({
+                    cloudProjectNumber: "547958960288" // Your specific project number
+                });
+                await session.createMainStageClient();
+                console.log("Meet SDK Initialized successfully.");
+            } catch (error) {
+                console.error("SDK Error:", error);
+            }
+        }
+
+        // --- 3. LOBBY LOGIC (HOST VS JOIN) ---
+        
+        // Action: Create New Board
+        document.getElementById('host-btn').onclick = () => {
+            const pin = Math.floor(1000 + Math.random() * 9000).toString();
+            
+            // Force PeerJS to use our PIN as the connection ID
+            peer = new Peer(prefix + pin);
+            
+            peer.on('open', (id) => {
+                enterCanvasScreen(pin, id);
+            });
+
+            peer.on('connection', (conn) => {
+                setupConnectionListeners(conn);
+                document.getElementById('status-text').innerText = "A new device connected!";
+            });
+        };
+
+        // Action: Join Existing Board
+        document.getElementById('join-btn').onclick = () => {
+            const pin = document.getElementById('join-pin').value;
+            if (!pin || pin.length !== 4) return alert("Enter a 4-digit PIN");
+            
+            // Guest gets a random ID
+            peer = new Peer(); 
+            
+            peer.on('open', (id) => {
+                // Connect directly to the Host's PIN
+                const conn = peer.connect(prefix + pin);
+                setupConnectionListeners(conn);
+                enterCanvasScreen(pin, prefix + pin); // We use the Host's ID for the mobile QR code
+            });
+            
+            peer.on('connection', (conn) => setupConnectionListeners(conn));
+        };
+
+        // UI Transition to Canvas
+        function enterCanvasScreen(pin, targetPeerId) {
+            document.getElementById('lobby-screen').style.display = 'none';
+            document.getElementById('canvas-screen').style.display = 'block';
+            document.getElementById('display-pin').innerText = pin;
+            
+            // Generate QR Code for Mobile App
+            const mobileUrl = `${window.location.origin}/mobile.html?peerId=${targetPeerId}`;
+            const qrImg = document.getElementById('qr-code');
+            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(mobileUrl)}`;
+            qrImg.style.display = "block";
+
+            setupCanvasEvents();
+        }
+
+        // --- 4. CONNECTION & RELAY LOGIC ---
+        function setupConnectionListeners(conn) {
+            conn.on('open', () => {
+                activeConnections.push(conn);
+                document.getElementById('status-text').innerText = `Connected to ${activeConnections.length} peer(s)!`;
+            });
+            
+            // WHEN WE RECEIVE DRAWING DATA FROM SOMEONE ELSE (or our phone)
+            conn.on('data', (data) => {
+                try {
+                    const drawData = JSON.parse(data);
+                    if (drawData.action === 'clear') {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    } else if (drawData.action === 'draw') {
+                        // Draw it on our screen
+                        drawLine(drawData.x0, drawData.y0, drawData.x1, drawData.y1, drawData.color, false);
+                        
+                        // Relay this drawing to everyone else in the Meet room!
+                        // (Except the person/phone who just sent it to us)
+                        activeConnections.forEach(otherConn => {
+                            if (otherConn.open && otherConn.peer !== conn.peer) {
+                                otherConn.send(data);
+                            }
+                        });
+                    }
+                } catch(e) { console.error("Bad data received", e); }
+            });            
+            
+            conn.on('close', () => {
+                activeConnections = activeConnections.filter(c => c.peer !== conn.peer);
+                document.getElementById('status-text').innerText = `Connected to ${activeConnections.length} peer(s)!`;
+            });
+        }
+
+        // --- 5. THE CANVAS DRAWING LOGIC ---
+        function setupCanvasEvents() {
+            canvas.addEventListener('mousedown', (e) => {
+                isDrawing = true; lastX = e.offsetX; lastY = e.offsetY;
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isDrawing) return;
+                const currentX = e.offsetX; const currentY = e.offsetY;
+                const myColor = document.getElementById('color-picker').value;
+
+                // Draw on my screen AND send to peers
+                drawLine(lastX, lastY, currentX, currentY, myColor, true);
+                lastX = currentX; lastY = currentY;
+            });
+
+            canvas.addEventListener('mouseup', () => isDrawing = false);
+            canvas.addEventListener('mouseout', () => isDrawing = false);
+
+            document.getElementById('clear-btn').onclick = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                broadcastToPeers(JSON.stringify({ action: 'clear' }));
+            };
+        }
+
+        function drawLine(x0, y0, x1, y1, color, emitToPeers) {
+            ctx.beginPath();
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(x1, y1);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            ctx.closePath();
+
+            // If I drew this, broadcast the coordinates to everyone else
+            if (emitToPeers) {
+                const payload = JSON.stringify({ action: 'draw', x0, y0, x1, y1, color });
+                broadcastToPeers(payload);
+            }
+        }
+
+        function broadcastToPeers(jsonString) {
+            activeConnections.forEach(conn => {
+                if (conn.open) conn.send(jsonString);
+            });
+        }
+
+        // Start the application
+        init();
+    </script>
+</body>
+</html>

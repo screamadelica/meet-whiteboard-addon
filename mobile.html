@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mobile Canvas Controller</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background: #333; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: white; font-family: sans-serif; }
+        #drawing-board { background: white; border: 2px solid #4285F4; border-radius: 8px; touch-action: none; margin-bottom: 15px; }
+        #status { margin-bottom: 10px; font-weight: bold; color: #fbbc04; }
+        
+        /* New Mobile Controls */
+        .mobile-controls { display: flex; gap: 10px; width: 350px; justify-content: space-between; align-items: center; }
+        button { background: #ea4335; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-size: 16px; font-weight: bold; width: 100%; }
+        button:active { background: #d93025; }
+    </style>
+</head>
+<body>
+    <div id="status">Connecting to Meet...</div>
+    
+    <canvas id="drawing-board" width="350" height="500"></canvas>
+
+    <div class="mobile-controls">
+        <button id="clear-btn">Clear Board</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawing-board');
+        const ctx = canvas.getContext('2d');
+        let connection = null;
+        let isDrawing = false;
+        let lastX = 0; let lastY = 0;
+
+        // 1. Get the Meet's Peer ID from the URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetPeerId = urlParams.get('peerId');
+
+        if (!targetPeerId) {
+            document.getElementById('status').innerText = "Error: No Peer ID found in URL.";
+        } else {
+            // 2. Start PeerJS and connect to the Main Stage
+            const peer = new Peer();
+            
+            peer.on('open', () => {
+                document.getElementById('status').innerText = "Linking...";
+                connection = peer.connect(targetPeerId);
+                
+                connection.on('open', () => {
+                    document.getElementById('status').innerText = "Connected! Start Drawing.";
+                    document.getElementById('status').style.color = "#34a853";
+                });
+
+                // NEW: Listen for drawing or clearing data FROM the Main Stage
+                connection.on('data', (data) => {
+                    try {
+                        const drawData = JSON.parse(data);
+                        if (drawData.action === 'clear') {
+                            // Clear the mobile canvas
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        } else if (drawData.action === 'draw') {
+                            // Draw the incoming line on the mobile canvas
+                            ctx.beginPath();
+                            ctx.moveTo(drawData.x0, drawData.y0);
+                            ctx.lineTo(drawData.x1, drawData.y1);
+                            ctx.strokeStyle = drawData.color;
+                            ctx.lineWidth = 4;
+                            ctx.lineCap = 'round';
+                            ctx.stroke();
+                            ctx.closePath();
+                        }
+                    } catch(e) { console.error("Bad data", e); }
+                });
+            });
+        }
+
+        // 3. Phone Touch Events for Drawing
+        function getTouchPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: e.touches[0].clientX - rect.left,
+                y: e.touches[0].clientY - rect.top
+            };
+        }
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDrawing = true;
+            const pos = getTouchPos(e);
+            lastX = pos.x; lastY = pos.y;
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!isDrawing || !connection || !connection.open) return;
+            
+            const pos = getTouchPos(e);
+            
+            // Draw locally on the phone
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.strokeStyle = '#4285F4'; // Mobile draws in Blue
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            // Send to Google Meet Main Stage
+            const payload = JSON.stringify({ 
+                action: 'draw', 
+                x0: lastX, y0: lastY, 
+                x1: pos.x, y1: pos.y, 
+                color: '#4285F4' 
+            });
+            connection.send(payload);
+
+            lastX = pos.x; lastY = pos.y;
+        });
+
+        canvas.addEventListener('touchend', () => isDrawing = false);
+
+        // NEW: Mobile Clear Button Logic
+        document.getElementById('clear-btn').onclick = () => {
+            // 1. Clear the local mobile canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 2. Tell the Google Meet Main Stage to clear its canvas too
+            if (connection && connection.open) {
+                connection.send(JSON.stringify({ action: 'clear' }));
+            }
+        };
+    </script>
+</body>
+</html>
