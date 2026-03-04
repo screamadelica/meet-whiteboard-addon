@@ -61,6 +61,7 @@
             <label><b>My Color:</b></label>
             <input type="color" id="color-picker" value="#4285F4">
             <button id="clear-btn" style="background: #ea4335;">Clear Board</button>
+            <button id="save-btn" style="background: #0F9D58;">Save Board</button>
         </div>
     </div>
 
@@ -76,6 +77,9 @@
         let isDrawing = false;
         let lastX = 0; let lastY = 0;
 
+        // Add a global array to store all the lines drawn
+        let allLines = [];
+        
         // --- 2. GOOGLE MEET SDK INITIALIZATION ---
         async function init() {
             try {
@@ -199,6 +203,28 @@
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 broadcastToPeers(JSON.stringify({ action: 'clear' }));
             };
+
+            // The Save Button Logic
+            document.getElementById('save-btn').onclick = async () => {
+                const currentPin = document.getElementById('display-pin').innerText;
+                document.getElementById('status-text').innerText = "Saving...";
+
+                try {
+                    // Send the data to our new Vercel API
+                    const response = await fetch('/api/save-board', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pin: currentPin, lines: allLines })
+                    });
+
+                    if (response.ok) {
+                        document.getElementById('status-text').innerText = "Board securely saved!";
+                    }
+                } catch (e) {
+                    document.getElementById('status-text').innerText = "Failed to save.";
+                }
+            };
+
         }
 
         function drawLine(x0, y0, x1, y1, color, emitToPeers) {
@@ -211,6 +237,9 @@
             ctx.stroke();
             ctx.closePath();
 
+            // Save to our array
+            allLines.push({ x0, y0, x1, y1, color });
+            
             // If I drew this, broadcast the coordinates to everyone else
             if (emitToPeers) {
                 const payload = JSON.stringify({ action: 'draw', x0, y0, x1, y1, color });
