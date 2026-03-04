@@ -11,7 +11,7 @@ export default async function handler(request, response) {
         const { pin, lines } = request.body;
         
         // Connect to the Neon database securely using Vercel's hidden variables
-        const sql = neon(process.env.DATABASE_URL);
+        const sql = neon(process.env.MEET_DATABASE_URL);
 
         // Create the table if it doesn't exist yet
         await sql`
