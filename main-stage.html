@@ -137,7 +137,7 @@
 
             peer.on('connection', (conn) => {
                 setupConnectionListeners(conn);
-                document.getElementById('status-text').innerText = "A new device connected!";
+                document.getElementById('status-text').innerText = "A new device connected to " + prefix + pin;
             });
         };
 

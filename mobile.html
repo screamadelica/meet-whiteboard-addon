@@ -42,9 +42,9 @@
             const peer = new Peer();
             
             peer.on('open', () => {
-                document.getElementById('status').innerText = "Linking... 1";
+                document.getElementById('status').innerText = "Linking..." + targetPeerId;
                 connection = peer.connect(targetPeerId);
-                document.getElementById('status').innerText = "Linked";
+                document.getElementById('status').innerText = "Linked to " + targetPeerId;
 
                 connection.on('open', () => {
                     document.getElementById('status').innerText = "Connected! Start Drawing.";
