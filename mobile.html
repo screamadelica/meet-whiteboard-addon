@@ -42,9 +42,10 @@
             const peer = new Peer();
             
             peer.on('open', () => {
-                document.getElementById('status').innerText = "Linking...";
+                document.getElementById('status').innerText = "Linking... 1";
                 connection = peer.connect(targetPeerId);
-                
+                document.getElementById('status').innerText = "Linked";
+
                 connection.on('open', () => {
                     document.getElementById('status').innerText = "Connected! Start Drawing.";
                     document.getElementById('status').style.color = "#34a853";
