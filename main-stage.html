@@ -129,7 +129,14 @@
             const pin = Math.floor(1000 + Math.random() * 9000).toString();
             
             // Force PeerJS to use our PIN as the connection ID
-            peer = new Peer(prefix + pin);
+            peer = new Peer(prefix + pin, {
+                config: {
+                    'iceServers': [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
             
             peer.on('open', (id) => {
                 enterCanvasScreen(pin, id);
@@ -147,7 +154,14 @@
             if (!pin || pin.length !== 4) return alert("Enter a 4-digit PIN");
             
             // Guest gets a random ID
-            peer = new Peer(); 
+            peer = new Peer({
+                config: {
+                    'iceServers': [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            }); 
             
             peer.on('open', (id) => {
                 // Connect directly to the Host's PIN
