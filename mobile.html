@@ -137,40 +137,16 @@
             ctx.lineCap = 'round';
             ctx.stroke();
 
-            // Get the raw pixels from the touch event
-            const rect = canvas.getBoundingClientRect();
-            const rawX = e.touches[0].clientX - rect.left;
-            const rawY = e.touches[0].clientY - rect.top;
-
-            // Convert raw pixels into a decimal percentage (e.g., 0.5 means 50%)
-            const relativeX = rawX / canvas.width;
-            const relativeY = rawY / canvas.height;
-
-            const relativePayload = JSON.stringify({ 
-                action: 'draw', 
-                x0: lastRelativeX, 
-                y0: lastRelativeY, 
-                x1: relativeX, 
-                y1: relativeY, 
-                color: '#4285F4' 
-            });
-
+            // Send to Google Meet Main Stage
             const payload = JSON.stringify({ 
                 action: 'draw', 
-                x0: lastX, 
-                y0: lastY, 
-                x1: pos.x, 
-                y1: pos.y, 
+                x0: lastX, y0: lastY, 
+                x1: pos.x, y1: pos.y, 
                 color: '#4285F4' 
             });
-
-            // Send to Google Meet Main Stage
-            connection.send(relativePayload);
+            connection.send(payload);
 
             lastX = pos.x; lastY = pos.y;
-            lastRelativeX = relativeX;
-            lastRelativeY = relativeY;
-
         });
 
         canvas.addEventListener('touchend', () => isDrawing = false);

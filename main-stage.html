@@ -257,15 +257,8 @@
                     if (drawData.action === 'clear') {
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
                     } else if (drawData.action === 'draw') {
-
-                        const realX0 = drawData.x0 * canvas.width;
-                        const realY0 = drawData.y0 * canvas.height;
-                        const realX1 = drawData.x1 * canvas.width;
-                        const realY1 = drawData.y1 * canvas.height;
-
                         // Draw it on our screen
-//                        drawLine(drawData.x0, drawData.y0, drawData.x1, drawData.y1, drawData.color, false);
-                        drawLine(realX0, realY0, realX1, realY1, drawData.color, false);
+                        drawLine(drawData.x0, drawData.y0, drawData.x1, drawData.y1, drawData.color, false);
                         
                         // Relay this drawing to everyone else in the Meet room!
                         // (Except the person/phone who just sent it to us)
