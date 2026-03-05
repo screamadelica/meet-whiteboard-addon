@@ -42,8 +42,32 @@
             const peer = new Peer({
                 config: {
                     'iceServers': [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
+                        {   
+                            urls: 'stun:stun.l.google.com:19302' 
+                        },
+                        {   
+                            urls: 'stun:stun1.l.google.com:19302' 
+                        },
+                        {
+                            urls: 'turn:eu-central.turnix.io:3478?transport=udp',
+                            username: '3386413b-f21f-4ad5-9b35-7e121afb03e1',
+                            credential: '88abd75787b0888e2d4317c54a2540fc'
+                        },
+                        {
+                            urls: 'turn:eu-central.turnix.io:3478?transport=tcp',
+                            username: '3386413b-f21f-4ad5-9b35-7e121afb03e1',
+                            credential: '88abd75787b0888e2d4317c54a2540fc'
+                        },
+                        {
+                            urls: 'turns:eu-central.turnix.io:443?transport=udp',
+                            username: '3386413b-f21f-4ad5-9b35-7e121afb03e1',
+                            credential: '88abd75787b0888e2d4317c54a2540fc'
+                        },
+                        {
+                            urls: 'turns:eu-central.turnix.io:443?transport=tcp',
+                            username: '3386413b-f21f-4ad5-9b35-7e121afb03e1',
+                            credential: '88abd75787b0888e2d4317c54a2540fc'
+                        }
                     ]
                 }
             });
