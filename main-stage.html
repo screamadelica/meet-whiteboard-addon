@@ -80,6 +80,34 @@
         // Add a global array to store all the lines drawn
         let allLines = [];
         
+        async function fetchSavedBoard(pin) {
+            document.getElementById('status-text').innerText = "Loading saved board...";
+            try {
+                const response = await fetch(`/api/load-board?pin=${pin}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.lines && data.lines.length > 0) {
+                        // 1. Restore our local array so we don't overwrite it later
+                        allLines = data.lines;
+                        
+                        // 2. Redraw every saved line onto the canvas
+                        data.lines.forEach(line => {
+                            // We pass 'false' at the end so it doesn't try to re-broadcast every single old line to peers
+                            drawLine(line.x0, line.y0, line.x1, line.y1, line.color, false); 
+                        });
+                        
+                        document.getElementById('status-text').innerText = "Saved board loaded!";
+                    } else {
+                        document.getElementById('status-text').innerText = "New board ready!";
+                    }
+                }
+            } catch (e) {
+                console.error("Load error:", e);
+                document.getElementById('status-text').innerText = "Failed to load board.";
+            }
+        }
+
         // --- 2. GOOGLE MEET SDK INITIALIZATION ---
         async function init() {
             try {
@@ -144,6 +172,8 @@
             qrImg.style.display = "block";
 
             setupCanvasEvents();
+
+            fetchSavedBoard(pin);
         }
 
         // --- 4. CONNECTION & RELAY LOGIC ---
