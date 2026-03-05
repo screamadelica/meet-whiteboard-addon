@@ -194,7 +194,7 @@
         function setupConnectionListeners(conn) {
             console.log("setupConnectionListeners")
             conn.on('open', () => {
-                activeConnections.push(conn);
+//                activeConnections.push(conn);
                 document.getElementById('status-text').innerText = `Connected to ${activeConnections.length} peer(s)!`;
                 console.log("Connected to ${activeConnections.length} peer(s)!")
             });
