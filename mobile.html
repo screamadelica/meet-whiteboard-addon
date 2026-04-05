@@ -38,42 +38,20 @@
         if (!targetPeerId) {
             document.getElementById('status').innerText = "Error: No Peer ID found in URL.";
         } else {
-            // 2. Start PeerJS and connect to the Main Stage
-            const peer = new Peer({
-                config: {
-                    'iceServers': [
-                        {   
-                            urls: 'stun:stun.l.google.com:19302' 
-                        },
-                        {   
-                            urls: 'stun:stun1.l.google.com:19302' 
-                        },
-                        {
-                            urls: 'turn:eu-central.turnix.io:3478?transport=udp',
-                            username: 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-                            credential: '6289edb5424e87d0cbc16175f0115ce4'
-                        },
-                        {
-                            urls: 'turn:eu-central.turnix.io:3478?transport=tcp',
-                            username: 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-                            credential: '6289edb5424e87d0cbc16175f0115ce4'
-                        },
-                        {
-                            urls: 'turns:eu-central.turnix.io:443?transport=udp',
-                            username: 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-                            credential: '6289edb5424e87d0cbc16175f0115ce4'
-                        },
-                        {
-                            urls: 'turns:eu-central.turnix.io:443?transport=tcp',
-                            username: 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-                            credential: '6289edb5424e87d0cbc16175f0115ce4'
-                        }
-                    ],
-                    'iceTransportPolicy': 'all'
-                }
-            });
-            
-            peer.on('open', () => {
+            // 2. Fetch config and Start PeerJS
+            async function initMobile() {
+                let peerConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+                try {
+                    const response = await fetch('/api/get-ice-servers');
+                    if (response.ok) {
+                        const data = await response.json();
+                        peerConfig = data.config;
+                    }
+                } catch (e) { console.error("ICE fetch error", e); }
+
+                const peer = new Peer({ config: peerConfig });
+
+                peer.on('open', () => {
                 document.getElementById('status').innerText = "Linking..." + targetPeerId;
                 connection = peer.connect(targetPeerId);
                 document.getElementById('status').innerText = "Linked to " + targetPeerId;
@@ -104,6 +82,9 @@
                     } catch(e) { console.error("Bad data", e); }
                 });
             });
+            }
+            
+            initMobile();
         }
 
         // 3. Phone Touch Events for Drawing

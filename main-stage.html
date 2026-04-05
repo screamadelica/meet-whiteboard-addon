@@ -80,6 +80,19 @@
         // Add a global array to store all the lines drawn
         let allLines = [];
         
+        async function fetchPeerConfig() {
+            try {
+                const response = await fetch('/api/get-ice-servers');
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.config;
+                }
+            } catch (e) {
+                console.error("Failed to fetch ICE config:", e);
+            }
+            return { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        }
+
         async function fetchSavedBoard(pin) {
             document.getElementById('status-text').innerText = "Loading saved board...";
             try {
@@ -125,43 +138,12 @@
         // --- 3. LOBBY LOGIC (HOST VS JOIN) ---
         
         // Action: Create New Board
-        document.getElementById('host-btn').onclick = () => {
+        document.getElementById('host-btn').onclick = async () => {
             const pin = Math.floor(1000 + Math.random() * 9000).toString();
             
             // Force PeerJS to use our PIN as the connection ID
-            peer = new Peer(prefix + pin, {
-                config: {
-                    'iceServers': [
-                        {   
-                            urls: 'stun:stun.l.google.com:19302' 
-                        },
-                        {   
-                            urls: 'stun:stun1.l.google.com:19302' 
-                        },
-                        {
-                            urls: 'turn:eu-central.turnix.io:3478?transport=udp',
-                            username: '6c675eb4-f017-4762-a99a-fe89d841cf92',
-                            credential: '9b744dc0d421d02ae8613a1dcee99d06'
-                        },
-                        {
-                            urls: 'turn:eu-central.turnix.io:3478?transport=tcp',
-                            username: '6c675eb4-f017-4762-a99a-fe89d841cf92',
-                            credential: '9b744dc0d421d02ae8613a1dcee99d06'
-                        },
-                        {
-                            urls: 'turns:eu-central.turnix.io:443?transport=udp',
-                            username: '6c675eb4-f017-4762-a99a-fe89d841cf92',
-                            credential: '9b744dc0d421d02ae8613a1dcee99d06'
-                        },
-                        {
-                            urls: 'turns:eu-central.turnix.io:443?transport=tcp',
-                            username: '6c675eb4-f017-4762-a99a-fe89d841cf92',
-                            credential: '9b744dc0d421d02ae8613a1dcee99d06'
-                        }
-                    ],
-                    'iceTransportPolicy': 'all'
-                }
-            });
+            const peerConfig = await fetchPeerConfig();
+            peer = new Peer(prefix + pin, { config: peerConfig });
             
             peer.on('open', (id) => {
                 enterCanvasScreen(pin, id);
@@ -174,44 +156,13 @@
         };
 
         // Action: Join Existing Board
-        document.getElementById('join-btn').onclick = () => {
+        document.getElementById('join-btn').onclick = async () => {
             const pin = document.getElementById('join-pin').value;
             if (!pin || pin.length !== 4) return alert("Enter a 4-digit PIN");
             
             // Guest gets a random ID
-            peer = new Peer({
-                config: {
-                    'iceServers': [
-                        {   
-                            urls: 'stun:stun.l.google.com:19302' 
-                        },
-                        {   
-                            urls: 'stun:stun1.l.google.com:19302' 
-                        },
-                        {
-                            urls: 'turn:eu-central.turnix.io:3478?transport=udp',
-                            username: 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-                            credential: '6289edb5424e87d0cbc16175f0115ce4'
-                        },
-                        {
-                            urls: 'turn:eu-central.turnix.io:3478?transport=tcp',
-                            username: 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-                            credential: '6289edb5424e87d0cbc16175f0115ce4'
-                        },
-                        {
-                            urls: 'turns:eu-central.turnix.io:443?transport=udp',
-                            username: 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-                            credential: '6289edb5424e87d0cbc16175f0115ce4'
-                        },
-                        {
-                            urls: 'turns:eu-central.turnix.io:443?transport=tcp',
-                            username: 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-                            credential: '6289edb5424e87d0cbc16175f0115ce4'
-                        }
-                    ],
-                    'iceTransportPolicy': 'all'
-                }
-            }); 
+            const peerConfig = await fetchPeerConfig();
+            peer = new Peer({ config: peerConfig }); 
             
             peer.on('open', (id) => {
                 // Connect directly to the Host's PIN
