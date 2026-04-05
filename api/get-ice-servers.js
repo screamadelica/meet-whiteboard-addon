@@ -1,38 +1,33 @@
-export default function handler(req, res) {
-    // It is recommended to store these in environment variables on Vercel
-    const iceServers = [
-        {   
-            urls: 'stun:stun.l.google.com:19302' 
-        },
-        {   
-            urls: 'stun:stun1.l.google.com:19302' 
-        },
-        {
-            urls: 'turn:eu-central.turnix.io:3478?transport=udp',
-            username: process.env.TURN_USERNAME || 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-            credential: process.env.TURN_CREDENTIAL || '6289edb5424e87d0cbc16175f0115ce4'
-        },
-        {
-            urls: 'turn:eu-central.turnix.io:3478?transport=tcp',
-            username: process.env.TURN_USERNAME || 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-            credential: process.env.TURN_CREDENTIAL || '6289edb5424e87d0cbc16175f0115ce4'
-        },
-        {
-            urls: 'turns:eu-central.turnix.io:443?transport=udp',
-            username: process.env.TURN_USERNAME || 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-            credential: process.env.TURN_CREDENTIAL || '6289edb5424e87d0cbc16175f0115ce4'
-        },
-        {
-            urls: 'turns:eu-central.turnix.io:443?transport=tcp',
-            username: process.env.TURN_USERNAME || 'cede4d01-899b-4a29-9cae-d15c8bba1f48',
-            credential: process.env.TURN_CREDENTIAL || '6289edb5424e87d0cbc16175f0115ce4'
-        }
-    ];
+import { Turnix } from 'turnix-js';
 
-    res.status(200).json({ 
-        config: {
-            iceServers: iceServers,
-            iceTransportPolicy: 'all'
-        }
-    });
+// Initialize the Turnix client.
+// Make sure to set TURNIX_API_TOKEN in your Vercel Environment Variables.
+const turnix = new Turnix(process.env.TURNIX_API_TOKEN);
+
+export default async function handler(req, res) {
+    try {
+        // 1. Request new dynamic ICE credentials from Turnix
+        const credentials = await turnix.getIceCredentials({
+            ttl: 3600,                // 1 hour
+            preferred_region: 'eu-central'
+        });
+
+        // 2. Return the dynamic configuration to the frontend
+        res.status(200).json({ 
+            config: {
+                iceServers: credentials.iceServers,
+                iceTransportPolicy: 'all'
+            }
+        });
+    } catch (error) {
+        console.error('Failed to fetch Turnix credentials:', error.message);
+        
+        // Fallback to basic STUN if the service is unavailable
+        res.status(200).json({
+            config: {
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+                iceTransportPolicy: 'all'
+            }
+        });
+    }
 }
