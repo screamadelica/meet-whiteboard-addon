@@ -5,20 +5,20 @@
     <title>Mobile Canvas Controller</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; background: #333; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: white; font-family: sans-serif; }
-        #drawing-board { background: white; border: 2px solid #4285F4; border-radius: 8px; touch-action: none; margin-bottom: 15px; }
-        #status { margin-bottom: 10px; font-weight: bold; color: #fbbc04; }
+        body { margin: 0; padding: 0; background: #333; overflow: hidden; height: 100vh; color: white; font-family: sans-serif; position: relative; }
+        #drawing-board { background: white; touch-action: none; display: block; }
+        #status { position: absolute; top: 10px; left: 10px; font-weight: bold; color: #fbbc04; z-index: 10; pointer-events: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
         
         /* New Mobile Controls */
-        .mobile-controls { display: flex; gap: 10px; width: 350px; justify-content: space-between; align-items: center; }
-        button { background: #ea4335; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-size: 16px; font-weight: bold; width: 100%; }
+        .mobile-controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; width: 90%; max-width: 350px; justify-content: space-between; align-items: center; z-index: 10; }
+        button { background: #ea4335; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-size: 16px; font-weight: bold; width: 100%; opacity: 0.9; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         button:active { background: #d93025; }
     </style>
 </head>
 <body>
     <div id="status">Connecting to Meet...</div>
     
-    <canvas id="drawing-board" width="350" height="500"></canvas>
+    <canvas id="drawing-board"></canvas>
 
     <div class="mobile-controls">
         <button id="clear-btn">Clear Board</button>
@@ -34,6 +34,17 @@
         // 1. Get the Meet's Peer ID from the URL
         const urlParams = new URLSearchParams(window.location.search);
         const targetPeerId = urlParams.get('peerId');
+
+        // The "Main Stage" canvas size for coordinate scaling
+        const MAIN_WIDTH = 600;
+        const MAIN_HEIGHT = 400;
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
 
         if (!targetPeerId) {
             document.getElementById('status').innerText = "Error: No Peer ID found in URL.";
@@ -70,9 +81,15 @@
                             ctx.clearRect(0, 0, canvas.width, canvas.height);
                         } else if (drawData.action === 'draw') {
                             // Draw the incoming line on the mobile canvas
+                            // Scale from Main Stage dimensions to mobile screen
+                            const x0 = (drawData.x0 / MAIN_WIDTH) * canvas.width;
+                            const y0 = (drawData.y0 / MAIN_HEIGHT) * canvas.height;
+                            const x1 = (drawData.x1 / MAIN_WIDTH) * canvas.width;
+                            const y1 = (drawData.y1 / MAIN_HEIGHT) * canvas.height;
+                            
                             ctx.beginPath();
-                            ctx.moveTo(drawData.x0, drawData.y0);
-                            ctx.lineTo(drawData.x1, drawData.y1);
+                            ctx.moveTo(x0, y0);
+                            ctx.lineTo(x1, y1);
                             ctx.strokeStyle = drawData.color;
                             ctx.lineWidth = 4;
                             ctx.lineCap = 'round';
@@ -121,8 +138,11 @@
             // Send to Google Meet Main Stage
             const payload = JSON.stringify({ 
                 action: 'draw', 
-                x0: lastX, y0: lastY, 
-                x1: pos.x, y1: pos.y, 
+                // Normalize coordinates to the Main Stage size
+                x0: (lastX / canvas.width) * MAIN_WIDTH, 
+                y0: (lastY / canvas.height) * MAIN_HEIGHT, 
+                x1: (pos.x / canvas.width) * MAIN_WIDTH, 
+                y1: (pos.y / canvas.height) * MAIN_HEIGHT, 
                 color: '#4285F4' 
             });
             connection.send(payload);
