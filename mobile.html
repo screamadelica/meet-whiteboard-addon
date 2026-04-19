@@ -28,6 +28,7 @@
         const canvas = document.getElementById('drawing-board');
         const ctx = canvas.getContext('2d');
         let connection = null;
+        let allLines = [];
         let isDrawing = false;
         let lastX = 0; let lastY = 0;
 
@@ -42,9 +43,29 @@
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            redrawAll();
         }
         window.addEventListener('resize', resize);
         resize();
+
+        function redrawAll() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            allLines.forEach(line => {
+                const x0 = (line.x0 / MAIN_WIDTH) * canvas.width;
+                const y0 = (line.y0 / MAIN_HEIGHT) * canvas.height;
+                const x1 = (line.x1 / MAIN_WIDTH) * canvas.width;
+                const y1 = (line.y1 / MAIN_HEIGHT) * canvas.height;
+                
+                ctx.beginPath();
+                ctx.moveTo(x0, y0);
+                ctx.lineTo(x1, y1);
+                ctx.strokeStyle = line.color;
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+                ctx.closePath();
+            });
+        }
 
         if (!targetPeerId) {
             document.getElementById('status').innerText = "Error: No Peer ID found in URL.";
@@ -78,10 +99,12 @@
                         const drawData = JSON.parse(data);
                         if (drawData.action === 'clear') {
                             // Clear the mobile canvas
+                            allLines = [];
                             ctx.clearRect(0, 0, canvas.width, canvas.height);
                         } else if (drawData.action === 'draw') {
                             // Draw the incoming line on the mobile canvas
                             // Scale from Main Stage dimensions to mobile screen
+                            allLines.push(drawData);
                             const x0 = (drawData.x0 / MAIN_WIDTH) * canvas.width;
                             const y0 = (drawData.y0 / MAIN_HEIGHT) * canvas.height;
                             const x1 = (drawData.x1 / MAIN_WIDTH) * canvas.width;
@@ -135,16 +158,18 @@
             ctx.lineCap = 'round';
             ctx.stroke();
 
-            // Send to Google Meet Main Stage
-            const payload = JSON.stringify({ 
-                action: 'draw', 
-                // Normalize coordinates to the Main Stage size
+            // Save segment in normalized stage coordinates
+            const lineData = { 
                 x0: (lastX / canvas.width) * MAIN_WIDTH, 
                 y0: (lastY / canvas.height) * MAIN_HEIGHT, 
                 x1: (pos.x / canvas.width) * MAIN_WIDTH, 
                 y1: (pos.y / canvas.height) * MAIN_HEIGHT, 
                 color: '#4285F4' 
-            });
+            };
+            allLines.push(lineData);
+
+            // Send to Google Meet Main Stage
+            const payload = JSON.stringify({ action: 'draw', ...lineData });
             connection.send(payload);
 
             lastX = pos.x; lastY = pos.y;
@@ -155,6 +180,7 @@
         // NEW: Mobile Clear Button Logic
         document.getElementById('clear-btn').onclick = () => {
             // 1. Clear the local mobile canvas
+            allLines = [];
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             // 2. Tell the Google Meet Main Stage to clear its canvas too
