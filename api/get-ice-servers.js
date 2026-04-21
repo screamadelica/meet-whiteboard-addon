@@ -1,11 +1,11 @@
 import { Turnix } from 'turnix-js';
 
-// Initialize the Turnix client.
-// Make sure to set TURNIX_API_TOKEN in your Vercel Environment Variables.
-const turnix = new Turnix(process.env.TURNIX_API_TOKEN);
-
 export default async function handler(req, res) {
     try {
+        // Initialize inside the handler to ensure errors are caught by the try/catch block
+        // and prevent the lambda from crashing on boot if the token is missing.
+        const turnix = new Turnix(process.env.TURNIX_API_TOKEN || '');
+
         // 1. Request new dynamic ICE credentials from Turnix
         const credentials = await turnix.getIceCredentials({
             ttl: 3600,                // 1 hour
