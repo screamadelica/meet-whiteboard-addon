@@ -77,14 +77,15 @@
         const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
         
         // Initialize Excalidraw Component
-        function MainApp() {
+        function MainApp(props) {
             const [isLibLoaded, setIsLibLoaded] = useState(false);
+            const [engineReady, setEngineReady] = useState(false);
 
             useEffect(() => {
-                console.log("[Main Stage] Library detection polling started...");
+                console.log("[React] MainApp mounted. Starting Lib polling...");
                 let checkInterval = setInterval(() => {
                     if (window.ExcalidrawLib) {
-                        console.log("[Main Stage] ExcalidrawLib detected on window object.");
+                        console.log("[React] ExcalidrawLib found on window.");
                         setIsLibLoaded(true);
                         clearInterval(checkInterval);
                     }
@@ -92,16 +93,26 @@
                 return () => clearInterval(checkInterval);
             }, []); // Run once on mount
 
-            if (!isLibLoaded || !window.ExcalidrawLib) {
+            // Trigger board fetch ONLY after engine is ready
+            useEffect(() => {
+                if (engineReady && props.pin) {
+                    console.log("[React] Engine is ready. Triggering fetchSavedBoard...");
+                    fetchSavedBoard(props.pin);
+                }
+            }, [engineReady, props.pin]);
+
+            if (!isLibLoaded) {
                 return React.createElement("div", { style: { padding: "20px", color: "#5f6368" } }, "Initializing drawing engine...");
             }
 
+            console.log("[React] Rendering Excalidraw component...");
             const Excalidraw = window.ExcalidrawLib.Excalidraw;
             return React.createElement(Excalidraw, {
                 excalidrawAPI: (api) => { 
-                    if (api && !excalidrawEngine) {
-                        console.log("[Main Stage] Excalidraw API reference captured.");
+                    if (api) {
+                        console.log("[React] Excalidraw API reference captured!");
                         excalidrawEngine = api; 
+                        setEngineReady(true);
                     }
                 },
                 onChange: (elements) => {
@@ -131,33 +142,22 @@
         }
 
         async function fetchSavedBoard(pin) {
-            console.log(`[Main Stage] fetchSavedBoard starting for PIN: ${pin}`);
+            console.log(`[Main Stage] fetchSavedBoard starting...`);
             try {
-                // 1. Small settle delay to allow the browser to layout the newly visible container
-                console.log("[Main Stage] fetchSavedBoard: Settling layout...");
-                await new Promise(r => setTimeout(r, 500));
+                if (!excalidrawEngine) {
+                    console.error("[Main Stage] CRITICAL: fetchSavedBoard called without engine!");
+                    return;
+                }
 
-                // 2. Start the board fetch and the engine-check loop simultaneously
-                console.log("[Main Stage] fetchSavedBoard: Requesting data from server...");
-                const boardPromise = fetch(`/api/load-board?pin=${pin}`)
+                console.log("[Main Stage] Requesting data from server...");
+                const data = await fetch(`/api/load-board?pin=${pin}`)
                     .then(res => res.ok ? res.json() : { elements: [] })
                     .catch(() => ({ elements: [] }));
 
-                // 3. Wait for the engine to wake up (up to 10 seconds)
-                console.log("[Main Stage] fetchSavedBoard: Waiting for Excalidraw engine reference...");
-                for (let i = 0; i < 50 && !excalidrawEngine; i++) {
-                    await new Promise(r => setTimeout(r, 200));
-                }
-
-                const data = await boardPromise;
-                console.log("[Main Stage] fetchSavedBoard: Board data received.");
-
-                if (!excalidrawEngine) {
-                    console.warn("[Main Stage] fetchSavedBoard: Excalidraw engine is slow to start. Proceeding anyway.");
-                }
+                console.log("[Main Stage] Board data response received.");
 
                 // 4. Load the data if the engine is ready and elements exist
-                if (excalidrawEngine && data.elements && data.elements.length > 0) {
+                if (data.elements && data.elements.length > 0) {
                     console.log("[Main Stage] fetchSavedBoard: Applying saved elements to scene.");
                     isRemoteUpdate = true;
                     excalidrawEngine.updateScene({ elements: data.elements });
@@ -236,17 +236,15 @@
             document.getElementById('display-pin').innerText = pin;
             
             // Render Excalidraw after the container is visible to ensure event listeners bind correctly
-            console.log("[Main Stage] Triggering React mount for Excalidraw.");
+            console.log("[Main Stage] Creating React Root for Excalidraw.");
             const root = ReactDOM.createRoot(document.getElementById('excalidraw-wrapper'));
-            root.render(React.createElement(MainApp));
+            root.render(React.createElement(MainApp, { pin: pin }));
 
             // Generate QR Code for Mobile App
             const mobileUrl = `${window.location.origin}/mobile.html?peerId=${targetPeerId}`;
             const qrImg = document.getElementById('qr-code');
             qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(mobileUrl)}`;
             qrImg.style.display = "block";
-
-            fetchSavedBoard(pin);
         }
 
         // --- 4. CONNECTION & RELAY LOGIC ---

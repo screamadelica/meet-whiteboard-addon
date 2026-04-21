@@ -10,7 +10,7 @@ export default async function handler(request, response) {
         }
         
         if (!TurnixClass || !process.env.TURNIX_API_TOKEN) {
-            throw new Error('Turnix not configured');
+            throw new Error('Turnix not configured or token missing');
         }
 
         // 2. Initialize Turnix
@@ -28,7 +28,7 @@ export default async function handler(request, response) {
             }
         });
     } catch (error) {
-        console.log('Using STUN fallback:', error.message);
+        console.warn('[API] get-ice-servers error, using fallback:', error.message);
         
         return response.status(200).json({
             config: {
