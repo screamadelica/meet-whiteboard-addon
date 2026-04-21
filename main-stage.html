@@ -81,8 +81,10 @@
             const [isLibLoaded, setIsLibLoaded] = useState(false);
 
             useEffect(() => {
+                console.log("[Main Stage] Library detection polling started...");
                 let checkInterval = setInterval(() => {
                     if (window.ExcalidrawLib) {
+                        console.log("[Main Stage] ExcalidrawLib detected on window object.");
                         setIsLibLoaded(true);
                         clearInterval(checkInterval);
                     }
@@ -97,7 +99,10 @@
             const Excalidraw = window.ExcalidrawLib.Excalidraw;
             return React.createElement(Excalidraw, {
                 excalidrawAPI: (api) => { 
-                    if (api) excalidrawEngine = api; 
+                    if (api && !excalidrawEngine) {
+                        console.log("[Main Stage] Excalidraw API reference captured.");
+                        excalidrawEngine = api; 
+                    }
                 },
                 onChange: (elements) => {
                     if (isRemoteUpdate) return;
@@ -112,6 +117,7 @@
         }
         
         async function fetchPeerConfig() {
+            console.log("[Main Stage] Fetching ICE configuration...");
             try {
                 const response = await fetch('/api/get-ice-servers');
                 if (response.ok) {
@@ -125,29 +131,34 @@
         }
 
         async function fetchSavedBoard(pin) {
-            document.getElementById('status-text').innerText = "Loading saved board...";
+            console.log(`[Main Stage] fetchSavedBoard starting for PIN: ${pin}`);
             try {
                 // 1. Small settle delay to allow the browser to layout the newly visible container
+                console.log("[Main Stage] fetchSavedBoard: Settling layout...");
                 await new Promise(r => setTimeout(r, 500));
 
                 // 2. Start the board fetch and the engine-check loop simultaneously
+                console.log("[Main Stage] fetchSavedBoard: Requesting data from server...");
                 const boardPromise = fetch(`/api/load-board?pin=${pin}`)
                     .then(res => res.ok ? res.json() : { elements: [] })
                     .catch(() => ({ elements: [] }));
 
                 // 3. Wait for the engine to wake up (up to 10 seconds)
+                console.log("[Main Stage] fetchSavedBoard: Waiting for Excalidraw engine reference...");
                 for (let i = 0; i < 50 && !excalidrawEngine; i++) {
                     await new Promise(r => setTimeout(r, 200));
                 }
 
                 const data = await boardPromise;
+                console.log("[Main Stage] fetchSavedBoard: Board data received.");
 
                 if (!excalidrawEngine) {
-                    console.warn("Excalidraw engine is slow to start. Proceeding...");
+                    console.warn("[Main Stage] fetchSavedBoard: Excalidraw engine is slow to start. Proceeding anyway.");
                 }
 
                 // 4. Load the data if the engine is ready and elements exist
                 if (excalidrawEngine && data.elements && data.elements.length > 0) {
+                    console.log("[Main Stage] fetchSavedBoard: Applying saved elements to scene.");
                     isRemoteUpdate = true;
                     excalidrawEngine.updateScene({ elements: data.elements });
                     setTimeout(() => { isRemoteUpdate = false; }, 500);
@@ -163,6 +174,7 @@
 
         // --- 2. GOOGLE MEET SDK INITIALIZATION ---
         async function init() {
+            console.log("[Main Stage] Initializing Google Meet Add-on SDK...");
             try {
                 // Keep the Meet SDK initialized so the iframe doesn't crash
                 const session = await window.meet.addon.createAddonSession({
@@ -179,6 +191,7 @@
         
         // Action: Create New Board
         document.getElementById('host-btn').onclick = async () => {
+            console.log("[Main Stage] Lobby: Create New Board clicked.");
             const pin = Math.floor(1000 + Math.random() * 9000).toString();
             
             // Force PeerJS to use our PIN as the connection ID
@@ -205,6 +218,7 @@
             peer = new Peer({ config: peerConfig }); 
             
             peer.on('open', (id) => {
+                console.log(`[Main Stage] Joiner Peer opened with ID: ${id}`);
                 // Connect directly to the Host's PIN
                 const conn = peer.connect(prefix + pin);
                 setupConnectionListeners(conn);
@@ -216,11 +230,13 @@
 
         // UI Transition to Canvas
         function enterCanvasScreen(pin, targetPeerId) {
+            console.log("[Main Stage] Transitioning UI to Canvas Screen.");
             document.getElementById('lobby-screen').style.display = 'none';
             document.getElementById('canvas-screen').style.display = 'block';
             document.getElementById('display-pin').innerText = pin;
             
             // Render Excalidraw after the container is visible to ensure event listeners bind correctly
+            console.log("[Main Stage] Triggering React mount for Excalidraw.");
             const root = ReactDOM.createRoot(document.getElementById('excalidraw-wrapper'));
             root.render(React.createElement(MainApp));
 
@@ -235,15 +251,14 @@
 
         // --- 4. CONNECTION & RELAY LOGIC ---
         function setupConnectionListeners(conn) {
-            console.log("setupConnectionListeners")
+            console.log(`[Main Stage] Initializing listeners for connection: ${conn.peer}`);
             conn.on('open', () => {
                 activeConnections.push(conn);
+                console.log(`[Main Stage] Connection open. Active peers: ${activeConnections.length}`);
                 document.getElementById('status-text').innerText = `Connected to ${activeConnections.length} peer(s)!`;
-                console.log("Connected to ${activeConnections.length} peer(s)!")
             });
             
             // WHEN WE RECEIVE DRAWING DATA FROM SOMEONE ELSE (or our phone)
-            console.log("WHEN WE RECEIVE DRAWING DATA FROM SOMEONE ELSE")
             conn.on('data', (data) => {
                 try {
                     const drawData = JSON.parse(data);
@@ -254,6 +269,7 @@
 
                         // Relay this drawing to everyone else in the Meet room!
                         // (Except the person/phone who just sent it to us)
+                        console.log(`[Main Stage] Received scene update from ${conn.peer}. Relaying...`);
                         activeConnections.forEach(otherConn => {
                             if (otherConn.open && otherConn.peer !== conn.peer) {
                                 otherConn.send(data);
@@ -264,6 +280,7 @@
             });            
             
             conn.on('close', () => {
+                console.log(`[Main Stage] Connection closed by: ${conn.peer}`);
                 activeConnections = activeConnections.filter(c => c.peer !== conn.peer);
                 document.getElementById('status-text').innerText = `Connected to ${activeConnections.length} peer(s)!`;
             });
@@ -280,6 +297,7 @@
         };
 
         document.getElementById('save-btn').onclick = async () => {
+            console.log("[Main Stage] Save Board action triggered.");
             const currentPin = document.getElementById('display-pin').innerText;
             if (!excalidrawEngine) return;
             document.getElementById('status-text').innerText = "Saving...";
@@ -292,6 +310,7 @@
                 });
 
                 if (response.ok) {
+                    console.log("[Main Stage] Board successfully saved to database.");
                     document.getElementById('status-text').innerText = "Board securely saved!";
                 }
             } catch (e) {
