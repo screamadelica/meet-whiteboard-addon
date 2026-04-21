@@ -1,10 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  publicDir: false,          // ← stops Vite from copying public/ into the output
-  define: {
-    "process.env.NODE_ENV": JSON.stringify("production"),
-  },
+  publicDir: false,
   esbuild: {
     jsx: "automatic",
   },
@@ -25,6 +22,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         inlineDynamicImports: true,
+        banner: "globalThis.process = { env: { NODE_ENV: 'production' } };", // ← injected before all module code
       },
     },
   },
