@@ -31,6 +31,19 @@
             const [excalidrawAPI, setExcalidrawAPI] = useState(null);
             const isRemoteUpdate = useRef(false);
             const connectionRef = useRef(null);
+            const [isLibLoaded, setIsLibLoaded] = useState(false);
+
+            useEffect(() => {
+                const checkLib = () => {
+                    if (window.ExcalidrawLib) {
+                        setIsLibLoaded(true);
+                    } else {
+                        setTimeout(checkLib, 50); // Poll every 50ms
+                    }
+                };
+                checkLib();
+            }, []); // Run once on mount
+
 
             useEffect(() => {
                 if (targetPeerId) {
@@ -74,10 +87,9 @@
                 connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements }));
             };
 
-            if (!window.ExcalidrawLib) {
+            if (!isLibLoaded) {
                 return React.createElement("div", { style: { padding: "20px" } }, "Loading Drawing Engine...");
             }
-
             return React.createElement(
                 "div", 
                 { id: "excalidraw-mobile-wrapper" },

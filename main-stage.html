@@ -76,9 +76,23 @@
         
         // Initialize Excalidraw Component
         function MainApp() {
-            if (!window.ExcalidrawLib) {
+            const [isLibLoaded, setIsLibLoaded] = useState(false);
+
+            useEffect(() => {
+                const checkLib = () => {
+                    if (window.ExcalidrawLib) {
+                        setIsLibLoaded(true);
+                    } else {
+                        setTimeout(checkLib, 50); // Poll every 50ms
+                    }
+                };
+                checkLib();
+            }, []); // Run once on mount
+
+            if (!isLibLoaded) {
                 return React.createElement("div", null, "Loading drawing engine...");
             }
+
             return React.createElement(window.ExcalidrawLib.Excalidraw, {
                 excalidrawAPI: (api) => { excalidrawAPI = api; },
                 onChange: (elements) => {
