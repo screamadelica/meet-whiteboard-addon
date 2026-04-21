@@ -72,7 +72,7 @@
         // --- 1. GLOBALS & SETUP ---
         let peer = null;
         let activeConnections = []; 
-        let excalidrawAPI = null;
+        let excalidrawEngine = null;
         let isRemoteUpdate = false;
         const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
         
@@ -96,7 +96,9 @@
 
             const Excalidraw = window.ExcalidrawLib.Excalidraw;
             return React.createElement(Excalidraw, {
-                excalidrawAPI: (api) => { if (!excalidrawAPI) excalidrawAPI = api; },
+                excalidrawAPI: (api) => { 
+                    if (api) excalidrawEngine = api; 
+                },
                 onChange: (elements) => {
                     if (isRemoteUpdate) return;
                     // Clear the "Ready" status once the user starts drawing
@@ -134,20 +136,20 @@
                     .catch(() => ({ elements: [] }));
 
                 // 3. Wait for the engine to wake up (up to 8 seconds)
-                for (let i = 0; i < 40 && !excalidrawAPI; i++) {
+                for (let i = 0; i < 40 && !excalidrawEngine; i++) {
                     await new Promise(r => setTimeout(r, 200));
                 }
 
                 const data = await boardPromise;
 
-                if (!excalidrawAPI) {
+                if (!excalidrawEngine) {
                     console.warn("Excalidraw engine is slow to start. Proceeding...");
                 }
 
                 // 4. Load the data if the engine is ready and elements exist
-                if (excalidrawAPI && data.elements && data.elements.length > 0) {
+                if (excalidrawEngine && data.elements && data.elements.length > 0) {
                     isRemoteUpdate = true;
-                    excalidrawAPI.updateScene({ elements: data.elements });
+                    excalidrawEngine.updateScene({ elements: data.elements });
                     setTimeout(() => { isRemoteUpdate = false; }, 500);
                     document.getElementById('status-text').innerText = "Saved board loaded!";
                     return;
@@ -245,9 +247,9 @@
             conn.on('data', (data) => {
                 try {
                     const drawData = JSON.parse(data);
-                    if (drawData.action === 'scene-update' && excalidrawAPI) {
+                    if (drawData.action === 'scene-update' && excalidrawEngine) {
                         isRemoteUpdate = true;
-                        excalidrawAPI.updateScene({ elements: drawData.elements });
+                        excalidrawEngine.updateScene({ elements: drawData.elements });
                         setTimeout(() => isRemoteUpdate = false, 150);
 
                         // Relay this drawing to everyone else in the Meet room!
@@ -269,9 +271,9 @@
 
         // --- 5. THE CANVAS DRAWING LOGIC ---
         document.getElementById('clear-btn').onclick = () => {
-            if (!excalidrawAPI) return;
+            if (!excalidrawEngine) return;
             if (confirm("Clear the entire board?")) {
-                excalidrawAPI.updateScene({ elements: [] });
+                excalidrawEngine.updateScene({ elements: [] });
                 document.getElementById('status-text').innerText = "Board cleared.";
                 broadcastToPeers(JSON.stringify({ action: 'scene-update', elements: [] }));
             }
@@ -279,14 +281,14 @@
 
         document.getElementById('save-btn').onclick = async () => {
             const currentPin = document.getElementById('display-pin').innerText;
-            if (!excalidrawAPI) return;
+            if (!excalidrawEngine) return;
             document.getElementById('status-text').innerText = "Saving...";
 
             try {
                 const response = await fetch('/api/save-board', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pin: currentPin, elements: excalidrawAPI.getSceneElements() })
+                    body: JSON.stringify({ pin: currentPin, elements: excalidrawEngine.getSceneElements() })
                 });
 
                 if (response.ok) {
