@@ -1,12 +1,16 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  publicDir: false,          // ← stops Vite from copying public/ into the output
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
   esbuild: {
-    jsx: "automatic",         // handles JSX inside .js files from node_modules
+    jsx: "automatic",
   },
   optimizeDeps: {
     esbuildOptions: {
-      jsx: "automatic",       // same for dependency pre-bundling
+      jsx: "automatic",
     },
   },
   build: {
