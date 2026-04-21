@@ -3,16 +3,24 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "vite build"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.17.6",
     "@neondatabase/serverless": "^1.0.2",
     "@tldraw/tldraw": "^4.4.0",
+    "peerjs": "^1.5.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "turnix-js": "^0.1.4",
     "yjs": "^13.6.29"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
   }
 }

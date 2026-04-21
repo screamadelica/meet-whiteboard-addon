@@ -1,34 +1,29 @@
 export default async function handler(request, response) {
     try {
-        // 1. Defensive check for the Turnix library and Token
-        let TurnixClass;
+        // 1. Safe attempt to import and initialize Turnix
+        let turnix;
         try {
             const mod = await import('turnix-js');
-            TurnixClass = mod.Turnix;
+            if (mod.Turnix && process.env.TURNIX_API_TOKEN) {
+                turnix = new mod.Turnix(process.env.TURNIX_API_TOKEN);
+            }
         } catch (e) {
-            console.warn("Turnix library not found, using fallback.");
+            console.log("[API] Turnix setup failed or skipped. Using fallback.");
         }
         
-        if (!TurnixClass || !process.env.TURNIX_API_TOKEN) {
-            throw new Error('Turnix not configured or token missing');
+        if (turnix) {
+            const credentials = await turnix.getIceCredentials({
+                ttl: 3600,
+                preferred_region: 'eu-central'
+            });
+            return response.status(200).json({ 
+                config: { iceServers: credentials.iceServers, iceTransportPolicy: 'all' }
+            });
         }
-
-        // 2. Initialize Turnix
-        const turnix = new TurnixClass(process.env.TURNIX_API_TOKEN);
-
-        const credentials = await turnix.getIceCredentials({
-            ttl: 3600,                // 1 hour
-            preferred_region: 'eu-central'
-        });
-
-        return response.status(200).json({ 
-            config: {
-                iceServers: credentials.iceServers,
-                iceTransportPolicy: 'all'
-            }
-        });
+        
+        throw new Error('No dynamic ICE provider available');
     } catch (error) {
-        console.warn('[API] get-ice-servers error, using fallback:', error.message);
+        console.warn('[API] get-ice-servers error:', error.message);
         
         return response.status(200).json({
             config: {

@@ -3,14 +3,10 @@
 <head>
     <title>PIN-Protected Shared Canvas</title>
     
-    <!-- 1. Add Excalidraw Dependencies -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script>window.process = { env: { NODE_ENV: 'production' } };</script>
-    <script src="https://unpkg.com/@excalidraw/excalidraw/dist/excalidraw.production.min.js"></script>
+    <!-- Bundled locally to avoid Google Meet CSP restrictions -->
+    <script src="/static/excalidraw-bundle.js"></script>
 
     <script src="https://www.gstatic.com/meetjs/addons/1.1.0/meet.addons.js"></script>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { font-family: sans-serif; margin: 0; padding: 0; background: #e8eaed; height: 100vh; overflow: hidden; }
         
@@ -82,11 +78,18 @@
             const [engineReady, setEngineReady] = useState(false);
 
             useEffect(() => {
-                console.log("[React] MainApp mounted. Starting Lib polling...");
+                console.log("[React] MainApp mounted. Starting library polling...");
+                let attempts = 0;
                 let checkInterval = setInterval(() => {
-                    if (window.ExcalidrawLib) {
-                        console.log("[React] ExcalidrawLib found on window.");
+                    attempts++;
+                    // Check for multiple possible global names used by different UMD builds
+                    const lib = window.ExcalidrawLib || window.Excalidraw;
+                    if (lib) {
+                        console.log(`[React] Library found on window as '${window.ExcalidrawLib ? 'ExcalidrawLib' : 'Excalidraw'}' after ${attempts} attempts.`);
                         setIsLibLoaded(true);
+                        clearInterval(checkInterval);
+                    } else if (attempts > 50) {
+                        console.error("[React] Library polling timed out (5s). Check script tags or CSP.");
                         clearInterval(checkInterval);
                     }
                 }, 100);
@@ -106,7 +109,8 @@
             }
 
             console.log("[React] Rendering Excalidraw component...");
-            const Excalidraw = window.ExcalidrawLib.Excalidraw;
+            const lib = window.ExcalidrawLib || window.Excalidraw;
+            const Excalidraw = lib.Excalidraw;
             return React.createElement(Excalidraw, {
                 excalidrawAPI: (api) => { 
                     if (api) {
