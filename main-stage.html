@@ -6,6 +6,7 @@
     <!-- 1. Add Excalidraw Dependencies -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script>window.process = { env: { NODE_ENV: 'production' } };</script>
     <script src="https://unpkg.com/@excalidraw/excalidraw/dist/excalidraw.production.min.js"></script>
 
     <script src="https://www.gstatic.com/meetjs/addons/1.1.0/meet.addons.js"></script>
@@ -87,8 +88,6 @@
                 }
             });
         }
-        const root = ReactDOM.createRoot(document.getElementById('excalidraw-wrapper'));
-        root.render(React.createElement(MainApp));
         
         async function fetchPeerConfig() {
             try {
@@ -199,6 +198,10 @@
             document.getElementById('canvas-screen').style.display = 'block';
             document.getElementById('display-pin').innerText = pin;
             
+            // Render Excalidraw after the container is visible to ensure event listeners bind correctly
+            const root = ReactDOM.createRoot(document.getElementById('excalidraw-wrapper'));
+            root.render(React.createElement(MainApp));
+
             // Generate QR Code for Mobile App
             const mobileUrl = `${window.location.origin}/mobile.html?peerId=${targetPeerId}`;
             const qrImg = document.getElementById('qr-code');
