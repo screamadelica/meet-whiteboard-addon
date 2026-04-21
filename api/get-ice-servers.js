@@ -1,10 +1,15 @@
-import { Turnix } from 'turnix-js';
-
 export default async function handler(req, res) {
     try {
+        // Dynamically import or check for Turnix to prevent top-level crashes
+        // if the package is missing or failing to initialize.
+        const { Turnix } = await import('turnix-js').catch(() => ({ Turnix: null }));
+        
+        if (!Turnix || !process.env.TURNIX_API_TOKEN) {
+            throw new Error('Turnix not configured');
+        }
+
         // Initialize inside the handler to ensure errors are caught by the try/catch block
-        // and prevent the lambda from crashing on boot if the token is missing.
-        const turnix = new Turnix(process.env.TURNIX_API_TOKEN || '');
+        const turnix = new Turnix(process.env.TURNIX_API_TOKEN);
 
         // 1. Request new dynamic ICE credentials from Turnix
         const credentials = await turnix.getIceCredentials({
@@ -20,10 +25,10 @@ export default async function handler(req, res) {
             }
         });
     } catch (error) {
-        console.error('Failed to fetch Turnix credentials:', error.message);
+        console.warn('ICE Fetch Warning (using fallback):', error.message);
         
         // Fallback to basic STUN if the service is unavailable
-        res.status(200).json({
+        return res.status(200).json({
             config: {
                 iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
                 iceTransportPolicy: 'all'

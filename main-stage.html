@@ -81,22 +81,22 @@
             const [isLibLoaded, setIsLibLoaded] = useState(false);
 
             useEffect(() => {
-                const checkLib = () => {
+                let checkInterval = setInterval(() => {
                     if (window.ExcalidrawLib) {
                         setIsLibLoaded(true);
-                    } else {
-                        setTimeout(checkLib, 50); // Poll every 50ms
+                        clearInterval(checkInterval);
                     }
-                };
-                checkLib();
+                }, 100);
+                return () => clearInterval(checkInterval);
             }, []); // Run once on mount
 
             if (!isLibLoaded) {
-                return React.createElement("div", null, "Loading drawing engine...");
+                return React.createElement("div", { style: { padding: "20px", color: "#5f6368" } }, "Initializing drawing engine...");
             }
 
-            return React.createElement(window.ExcalidrawLib.Excalidraw, {
-                excalidrawAPI: (api) => { excalidrawAPI = api; },
+            const Excalidraw = window.ExcalidrawLib.Excalidraw;
+            return React.createElement(Excalidraw, {
+                excalidrawAPI: (api) => { if (!excalidrawAPI) excalidrawAPI = api; },
                 onChange: (elements) => {
                     if (isRemoteUpdate) return;
                     // Clear the "Ready" status once the user starts drawing
