@@ -75,7 +75,7 @@
         // Initialize Excalidraw Component
         function MainApp() {
             return React.createElement(ExcalidrawLib.Excalidraw, {
-                excalidrawAPI: (api) => { if (!excalidrawAPI) excalidrawAPI = api; },
+                excalidrawAPI: (api) => { excalidrawAPI = api; },
                 onChange: (elements) => {
                     if (isRemoteUpdate) return;
                     // Clear the "Ready" status once the user starts drawing
@@ -106,30 +106,32 @@
         async function fetchSavedBoard(pin) {
             document.getElementById('status-text').innerText = "Loading saved board...";
             try {
-                const response = await fetch(`/api/load-board?pin=${pin}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    // 1. Wait longer for the API (up to 3 seconds)
-                    for (let i = 0; i < 15 && !excalidrawAPI; i++) {
-                        await new Promise(r => setTimeout(r, 200));
-                    }
+                // 1. Small settle delay to allow the browser to layout the newly visible container
+                await new Promise(r => setTimeout(r, 500));
 
-                    if (!excalidrawAPI) {
-                        document.getElementById('status-text').innerText = "Canvas engine error. Please refresh.";
-                        return;
-                    }
+                // 2. Start the board fetch and the engine-check loop simultaneously
+                const boardPromise = fetch(`/api/load-board?pin=${pin}`)
+                    .then(res => res.ok ? res.json() : { elements: [] })
+                    .catch(() => ({ elements: [] }));
 
-                    // 2. Load the data if it exists
-                    if (data.elements && data.elements.length > 0) {
-                        isRemoteUpdate = true;
-                        excalidrawAPI.updateScene({ elements: data.elements });
-                        setTimeout(() => { isRemoteUpdate = false; }, 300);
-                        document.getElementById('status-text').innerText = "Saved board loaded!";
-                        return;
-                    }
-                } else {
-                    document.getElementById('status-text').innerText = "Connected!";
+                // 3. Wait for the engine to wake up (up to 8 seconds)
+                for (let i = 0; i < 40 && !excalidrawAPI; i++) {
+                    await new Promise(r => setTimeout(r, 200));
+                }
+
+                const data = await boardPromise;
+
+                if (!excalidrawAPI) {
+                    console.warn("Excalidraw engine is slow to start. Proceeding...");
+                }
+
+                // 4. Load the data if the engine is ready and elements exist
+                if (excalidrawAPI && data.elements && data.elements.length > 0) {
+                    isRemoteUpdate = true;
+                    excalidrawAPI.updateScene({ elements: data.elements });
+                    setTimeout(() => { isRemoteUpdate = false; }, 500);
+                    document.getElementById('status-text').innerText = "Saved board loaded!";
+                    return;
                 }
             } catch (e) {
                 console.error("Load error:", e);
