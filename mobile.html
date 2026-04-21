@@ -87,13 +87,15 @@
                 connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements }));
             };
 
-            if (!isLibLoaded) {
+            if (!isLibLoaded || !window.ExcalidrawLib) {
                 return React.createElement("div", { style: { padding: "20px" } }, "Loading Drawing Engine...");
             }
+
+            const Excalidraw = window.ExcalidrawLib.Excalidraw;
             return React.createElement(
                 "div", 
                 { id: "excalidraw-mobile-wrapper" },
-                React.createElement(window.ExcalidrawLib.Excalidraw, {
+                React.createElement(Excalidraw, {
                     excalidrawAPI: (api) => setExcalidrawAPI(api),
                     onChange: onBoardChange,
                     UIOptions: {
@@ -110,7 +112,16 @@
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('excalidraw-mobile-wrapper'));
-        root.render(React.createElement(MobileApp));
+        // Ensure library is available before mounting React
+        const initMobile = () => {
+            if (window.React && window.ReactDOM && document.getElementById('excalidraw-mobile-wrapper')) {
+                const root = ReactDOM.createRoot(document.getElementById('excalidraw-mobile-wrapper'));
+                root.render(React.createElement(MobileApp));
+            } else {
+                setTimeout(initMobile, 100);
+            }
+        };
+
+        initMobile();
     </script>
 </html>

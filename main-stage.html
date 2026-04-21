@@ -90,7 +90,7 @@
                 return () => clearInterval(checkInterval);
             }, []); // Run once on mount
 
-            if (!isLibLoaded) {
+            if (!isLibLoaded || !window.ExcalidrawLib) {
                 return React.createElement("div", { style: { padding: "20px", color: "#5f6368" } }, "Initializing drawing engine...");
             }
 
@@ -135,8 +135,8 @@
                     .then(res => res.ok ? res.json() : { elements: [] })
                     .catch(() => ({ elements: [] }));
 
-                // 3. Wait for the engine to wake up (up to 8 seconds)
-                for (let i = 0; i < 40 && !excalidrawEngine; i++) {
+                // 3. Wait for the engine to wake up (up to 10 seconds)
+                for (let i = 0; i < 50 && !excalidrawEngine; i++) {
                     await new Promise(r => setTimeout(r, 200));
                 }
 
