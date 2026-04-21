@@ -58,6 +58,7 @@
         </div>
 
         <div class="controls">
+            <button id="clear-btn" style="background: #ea4335;">Clear Board</button>
             <button id="save-btn" style="background: #0F9D58;">Save Board</button>
         </div>
     </div>
@@ -77,6 +78,11 @@
                 excalidrawAPI: (api) => { if (!excalidrawAPI) excalidrawAPI = api; },
                 onChange: (elements) => {
                     if (isRemoteUpdate) return;
+                    // Clear the "Ready" status once the user starts drawing
+                    const status = document.getElementById('status-text');
+                    if (elements.length > 0 && status.innerText.includes("ready")) {
+                        status.innerText = "Editing...";
+                    }
                     broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
                 }
             });
@@ -104,16 +110,23 @@
                 if (response.ok) {
                     const data = await response.json();
                     
-                    // Small retry loop to ensure the React-based API is ready
-                    for (let i = 0; i < 5 && !excalidrawAPI; i++) await new Promise(r => setTimeout(r, 200));
+                    // 1. Wait longer for the API (up to 3 seconds)
+                    for (let i = 0; i < 15 && !excalidrawAPI; i++) {
+                        await new Promise(r => setTimeout(r, 200));
+                    }
 
-                    if (data.elements && data.elements.length > 0 && excalidrawAPI) {
+                    if (!excalidrawAPI) {
+                        document.getElementById('status-text').innerText = "Canvas engine error. Please refresh.";
+                        return;
+                    }
+
+                    // 2. Load the data if it exists
+                    if (data.elements && data.elements.length > 0) {
                         isRemoteUpdate = true;
                         excalidrawAPI.updateScene({ elements: data.elements });
-                        setTimeout(() => { isRemoteUpdate = false; }, 200);
+                        setTimeout(() => { isRemoteUpdate = false; }, 300);
                         document.getElementById('status-text').innerText = "Saved board loaded!";
-                    } else {
-                        document.getElementById('status-text').innerText = "New board ready!";
+                        return;
                     }
                 } else {
                     document.getElementById('status-text').innerText = "Connected!";
@@ -122,6 +135,7 @@
                 console.error("Load error:", e);
                 document.getElementById('status-text').innerText = "Failed to load board.";
             }
+            document.getElementById('status-text').innerText = "New board ready!";
         }
 
         // --- 2. GOOGLE MEET SDK INITIALIZATION ---
@@ -209,7 +223,7 @@
                     if (drawData.action === 'scene-update' && excalidrawAPI) {
                         isRemoteUpdate = true;
                         excalidrawAPI.updateScene({ elements: drawData.elements });
-                        setTimeout(() => isRemoteUpdate = false, 50);
+                        setTimeout(() => isRemoteUpdate = false, 150);
 
                         // Relay this drawing to everyone else in the Meet room!
                         // (Except the person/phone who just sent it to us)
@@ -229,6 +243,15 @@
         }
 
         // --- 5. THE CANVAS DRAWING LOGIC ---
+        document.getElementById('clear-btn').onclick = () => {
+            if (!excalidrawAPI) return;
+            if (confirm("Clear the entire board?")) {
+                excalidrawAPI.updateScene({ elements: [] });
+                document.getElementById('status-text').innerText = "Board cleared.";
+                broadcastToPeers(JSON.stringify({ action: 'scene-update', elements: [] }));
+            }
+        };
+
         document.getElementById('save-btn').onclick = async () => {
             const currentPin = document.getElementById('display-pin').innerText;
             if (!excalidrawAPI) return;
