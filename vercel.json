@@ -1,4 +1,10 @@
 {
   "buildCommand": "npm run build",
-  "outputDirectory": "public"
+  "outputDirectory": "public",
+  "routes": [
+    { "src": "/static/(.*)", "dest": "/static/$1" },
+    { "src": "/main-stage.html", "dest": "/main-stage.html" },
+    { "src": "/mobile.html", "dest": "/mobile.html" },
+    { "src": "/side-panel.html", "dest": "/side-panel.html" }
+  ]
 }
