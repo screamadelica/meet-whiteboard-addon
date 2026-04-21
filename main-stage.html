@@ -74,7 +74,7 @@
         // Initialize Excalidraw Component
         function MainApp() {
             return React.createElement(ExcalidrawLib.Excalidraw, {
-                excalidrawAPI: (api) => { excalidrawAPI = api; },
+                excalidrawAPI: (api) => { if (!excalidrawAPI) excalidrawAPI = api; },
                 onChange: (elements) => {
                     if (isRemoteUpdate) return;
                     broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
@@ -110,7 +110,7 @@
                     if (data.elements && data.elements.length > 0 && excalidrawAPI) {
                         isRemoteUpdate = true;
                         excalidrawAPI.updateScene({ elements: data.elements });
-                        setTimeout(() => isRemoteUpdate = false, 100);
+                        setTimeout(() => { isRemoteUpdate = false; }, 200);
                         document.getElementById('status-text').innerText = "Saved board loaded!";
                     } else {
                         document.getElementById('status-text').innerText = "New board ready!";

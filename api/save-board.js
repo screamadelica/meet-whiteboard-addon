@@ -8,7 +8,7 @@ export default async function handler(request, response) {
 
     try {
         // Grab the Room PIN and the drawing data sent from the frontend
-        const { pin, lines } = request.body;
+        const { pin, elements } = request.body;
         
         // Connect to the Neon database securely using Vercel's hidden variables
         const sql = neon(process.env.MEET_DATABASE_URL);
@@ -24,8 +24,8 @@ export default async function handler(request, response) {
         // Insert or Update the board data
         await sql`
             INSERT INTO boards (pin, lines_json) 
-            VALUES (${pin}, ${JSON.stringify(lines)})
-            ON CONFLICT (pin) DO UPDATE SET lines_json = ${JSON.stringify(lines)};
+            VALUES (${pin}, ${JSON.stringify(elements)})
+            ON CONFLICT (pin) DO UPDATE SET lines_json = ${JSON.stringify(elements)};
         `;
 
         return response.status(200).json({ success: true, message: "Board Saved!" });

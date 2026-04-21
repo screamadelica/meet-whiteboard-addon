@@ -19,11 +19,11 @@ export default async function handler(request, response) {
 
         // If no board exists for this PIN, just return an empty array
         if (result.length === 0) {
-            return response.status(200).json({ lines: [] });
+            return response.status(200).json({ elements: [] });
         }
 
-        // Return the saved lines!
-        return response.status(200).json({ lines: JSON.parse(result[0].lines_json) });
+        // Return the saved elements!
+        return response.status(200).json({ elements: JSON.parse(result[0].lines_json) });
         
     } catch (error) {
         console.error(error);
