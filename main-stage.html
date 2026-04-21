@@ -103,12 +103,20 @@
                 const response = await fetch(`/api/load-board?pin=${pin}`);
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.elements && excalidrawAPI) {
+                    
+                    // Small retry loop to ensure the React-based API is ready
+                    for (let i = 0; i < 5 && !excalidrawAPI; i++) await new Promise(r => setTimeout(r, 200));
+
+                    if (data.elements && data.elements.length > 0 && excalidrawAPI) {
                         isRemoteUpdate = true;
                         excalidrawAPI.updateScene({ elements: data.elements });
                         setTimeout(() => isRemoteUpdate = false, 100);
                         document.getElementById('status-text').innerText = "Saved board loaded!";
+                    } else {
+                        document.getElementById('status-text').innerText = "New board ready!";
                     }
+                } else {
+                    document.getElementById('status-text').innerText = "Connected!";
                 }
             } catch (e) {
                 console.error("Load error:", e);
