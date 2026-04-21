@@ -2,12 +2,18 @@
 <html>
 <head>
     <title>PIN-Protected Shared Canvas</title>
+    
+    <!-- 1. Add Excalidraw Dependencies -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@excalidraw/excalidraw/dist/excalidraw.production.min.js"></script>
+
     <script src="https://www.gstatic.com/meetjs/addons/1.1.0/meet.addons.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #e8eaed; display: flex; flex-direction: column; align-items: center; }
+        body { font-family: sans-serif; margin: 0; padding: 0; background: #e8eaed; height: 100vh; overflow: hidden; }
         
-        /* Lobby Styles */
+        #lobby-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
         .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; margin-top: 40px; }
         .card input, .card button { padding: 10px; margin: 5px; font-size: 16px; border-radius: 4px; }
         
@@ -15,13 +21,7 @@
         .header { text-align: center; margin-bottom: 10px; }
         #status-text { color: #5f6368; font-style: italic; font-size: 0.9em; }
         
-        #drawing-board {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            cursor: crosshair;
-            border: 2px solid #dadce0;
-        }
+        #excalidraw-wrapper { width: 800px; height: 500px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 2px solid #dadce0; overflow: hidden; }
         
         .controls { margin-top: 15px; display: flex; gap: 10px; align-items: center; justify-content: center; }
         button { background: #4285F4; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold; }
@@ -29,7 +29,7 @@
     </style>
 </head>
 <body>
-
+    <div id="lobby-container">
     <div id="lobby-screen" class="card">
         <h2 style="color: #4285F4;">Collaborative Whiteboard</h2>
         <p>Start a new board, or join an existing one.</p>
@@ -54,31 +54,35 @@
                 <img id="qr-code" src="" alt="Waiting for ID..." style="width: 120px; height: 120px; display: none;">
             </div>
             
-            <canvas id="drawing-board" width="600" height="400"></canvas>
+            <div id="excalidraw-wrapper"></div>
         </div>
 
         <div class="controls">
-            <label><b>My Color:</b></label>
-            <input type="color" id="color-picker" value="#4285F4">
-            <button id="clear-btn" style="background: #ea4335;">Clear Board</button>
             <button id="save-btn" style="background: #0F9D58;">Save Board</button>
         </div>
     </div>
+    </div>
 
-    <script>
+    <script type="text/javascript">
         // --- 1. GLOBALS & SETUP ---
         let peer = null;
         let activeConnections = []; 
+        let excalidrawAPI = null;
+        let isRemoteUpdate = false;
         const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
         
-        // Canvas Setup
-        const canvas = document.getElementById('drawing-board');
-        const ctx = canvas.getContext('2d');
-        let isDrawing = false;
-        let lastX = 0; let lastY = 0;
-
-        // Add a global array to store all the lines drawn
-        let allLines = [];
+        // Initialize Excalidraw Component
+        function MainApp() {
+            return React.createElement(ExcalidrawLib.Excalidraw, {
+                excalidrawAPI: (api) => { excalidrawAPI = api; },
+                onChange: (elements) => {
+                    if (isRemoteUpdate) return;
+                    broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
+                }
+            });
+        }
+        const root = ReactDOM.createRoot(document.getElementById('excalidraw-wrapper'));
+        root.render(React.createElement(MainApp));
         
         async function fetchPeerConfig() {
             try {
@@ -99,20 +103,11 @@
                 const response = await fetch(`/api/load-board?pin=${pin}`);
                 if (response.ok) {
                     const data = await response.json();
-                    
-                    if (data.lines && data.lines.length > 0) {
-                        // 1. Restore our local array so we don't overwrite it later
-                        allLines = data.lines;
-                        
-                        // 2. Redraw every saved line onto the canvas
-                        data.lines.forEach(line => {
-                            // We pass 'false' at the end so it doesn't try to re-broadcast every single old line to peers
-                            drawLine(line.x0, line.y0, line.x1, line.y1, line.color, false); 
-                        });
-                        
+                    if (data.elements && excalidrawAPI) {
+                        isRemoteUpdate = true;
+                        excalidrawAPI.updateScene({ elements: data.elements });
+                        setTimeout(() => isRemoteUpdate = false, 100);
                         document.getElementById('status-text').innerText = "Saved board loaded!";
-                    } else {
-                        document.getElementById('status-text').innerText = "New board ready!";
                     }
                 }
             } catch (e) {
@@ -186,8 +181,6 @@
             qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(mobileUrl)}`;
             qrImg.style.display = "block";
 
-            setupCanvasEvents();
-
             fetchSavedBoard(pin);
         }
 
@@ -205,12 +198,11 @@
             conn.on('data', (data) => {
                 try {
                     const drawData = JSON.parse(data);
-                    if (drawData.action === 'clear') {
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    } else if (drawData.action === 'draw') {
-                        // Draw it on our screen
-                        drawLine(drawData.x0, drawData.y0, drawData.x1, drawData.y1, drawData.color, false);
-                        
+                    if (drawData.action === 'scene-update' && excalidrawAPI) {
+                        isRemoteUpdate = true;
+                        excalidrawAPI.updateScene({ elements: drawData.elements });
+                        setTimeout(() => isRemoteUpdate = false, 50);
+
                         // Relay this drawing to everyone else in the Meet room!
                         // (Except the person/phone who just sent it to us)
                         activeConnections.forEach(otherConn => {
@@ -229,71 +221,25 @@
         }
 
         // --- 5. THE CANVAS DRAWING LOGIC ---
-        function setupCanvasEvents() {
-            canvas.addEventListener('mousedown', (e) => {
-                isDrawing = true; lastX = e.offsetX; lastY = e.offsetY;
-            });
+        document.getElementById('save-btn').onclick = async () => {
+            const currentPin = document.getElementById('display-pin').innerText;
+            if (!excalidrawAPI) return;
+            document.getElementById('status-text').innerText = "Saving...";
 
-            canvas.addEventListener('mousemove', (e) => {
-                if (!isDrawing) return;
-                const currentX = e.offsetX; const currentY = e.offsetY;
-                const myColor = document.getElementById('color-picker').value;
+            try {
+                const response = await fetch('/api/save-board', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin: currentPin, elements: excalidrawAPI.getSceneElements() })
+                });
 
-                // Draw on my screen AND send to peers
-                drawLine(lastX, lastY, currentX, currentY, myColor, true);
-                lastX = currentX; lastY = currentY;
-            });
-
-            canvas.addEventListener('mouseup', () => isDrawing = false);
-            canvas.addEventListener('mouseout', () => isDrawing = false);
-
-            document.getElementById('clear-btn').onclick = () => {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                broadcastToPeers(JSON.stringify({ action: 'clear' }));
-            };
-
-            // The Save Button Logic
-            document.getElementById('save-btn').onclick = async () => {
-                const currentPin = document.getElementById('display-pin').innerText;
-                document.getElementById('status-text').innerText = "Saving...";
-
-                try {
-                    // Send the data to our new Vercel API
-                    const response = await fetch('/api/save-board', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ pin: currentPin, lines: allLines })
-                    });
-
-                    if (response.ok) {
-                        document.getElementById('status-text').innerText = "Board securely saved!";
-                    }
-                } catch (e) {
-                    document.getElementById('status-text').innerText = "Failed to save.";
+                if (response.ok) {
+                    document.getElementById('status-text').innerText = "Board securely saved!";
                 }
-            };
-
-        }
-
-        function drawLine(x0, y0, x1, y1, color, emitToPeers) {
-            ctx.beginPath();
-            ctx.moveTo(x0, y0);
-            ctx.lineTo(x1, y1);
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 4;
-            ctx.lineCap = 'round';
-            ctx.stroke();
-            ctx.closePath();
-
-            // Save to our array
-            allLines.push({ x0, y0, x1, y1, color });
-            
-            // If I drew this, broadcast the coordinates to everyone else
-            if (emitToPeers) {
-                const payload = JSON.stringify({ action: 'draw', x0, y0, x1, y1, color });
-                broadcastToPeers(payload);
+            } catch (e) {
+                document.getElementById('status-text').innerText = "Failed to save.";
             }
-        }
+        };
 
         function broadcastToPeers(jsonString) {
             activeConnections.forEach(conn => {

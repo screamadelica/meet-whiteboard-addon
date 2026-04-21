@@ -3,191 +3,97 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Mobile Canvas Controller</title>
+    
+    <!-- Excalidraw Dependencies -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@excalidraw/excalidraw/dist/excalidraw.production.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
     <style>
-        body { margin: 0; padding: 0; background: #333; overflow: hidden; height: 100vh; color: white; font-family: sans-serif; position: relative; }
-        #drawing-board { background: white; touch-action: none; display: block; }
-        #status { position: absolute; top: 10px; left: 10px; font-weight: bold; color: #fbbc04; z-index: 10; pointer-events: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
-        
-        /* New Mobile Controls */
-        .mobile-controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; width: 90%; max-width: 350px; justify-content: space-between; align-items: center; z-index: 10; }
-        button { background: #ea4335; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-size: 16px; font-weight: bold; width: 100%; opacity: 0.9; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        button:active { background: #d93025; }
+        body { margin: 0; padding: 0; background: #f0f2f5; overflow: hidden; height: 100vh; font-family: sans-serif; }
+        #status { position: absolute; top: 10px; left: 10px; font-weight: bold; color: #fbbc04; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+        #excalidraw-mobile-wrapper { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; }
     </style>
 </head>
 <body>
     <div id="status">Connecting to Meet...</div>
-    
-    <canvas id="drawing-board"></canvas>
+    <div id="excalidraw-mobile-wrapper"></div>
 
-    <div class="mobile-controls">
-        <button id="clear-btn">Clear Board</button>
-    </div>
-
-    <script>
-        const canvas = document.getElementById('drawing-board');
-        const ctx = canvas.getContext('2d');
-        let connection = null;
-        let allLines = [];
-        let isDrawing = false;
-        let lastX = 0; let lastY = 0;
-
-        // 1. Get the Meet's Peer ID from the URL
+    <script type="text/javascript">
+        const { useState, useEffect, useRef } = React;
         const urlParams = new URLSearchParams(window.location.search);
         const targetPeerId = urlParams.get('peerId');
 
-        // The "Main Stage" canvas size for coordinate scaling
-        const MAIN_WIDTH = 600;
-        const MAIN_HEIGHT = 400;
+        function MobileApp() {
+            const [excalidrawAPI, setExcalidrawAPI] = useState(null);
+            const isRemoteUpdate = useRef(false);
+            const connectionRef = useRef(null);
 
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            redrawAll();
-        }
-        window.addEventListener('resize', resize);
-        resize();
+            useEffect(() => {
+                if (targetPeerId) {
+                    initPeer();
+                } else {
+                    document.getElementById('status').innerText = "Error: No Peer ID found.";
+                }
+            }, []);
 
-        function redrawAll() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            allLines.forEach(line => {
-                const x0 = (line.x0 / MAIN_WIDTH) * canvas.width;
-                const y0 = (line.y0 / MAIN_HEIGHT) * canvas.height;
-                const x1 = (line.x1 / MAIN_WIDTH) * canvas.width;
-                const y1 = (line.y1 / MAIN_HEIGHT) * canvas.height;
-                
-                ctx.beginPath();
-                ctx.moveTo(x0, y0);
-                ctx.lineTo(x1, y1);
-                ctx.strokeStyle = line.color;
-                ctx.lineWidth = 4;
-                ctx.lineCap = 'round';
-                ctx.stroke();
-                ctx.closePath();
-            });
-        }
-
-        if (!targetPeerId) {
-            document.getElementById('status').innerText = "Error: No Peer ID found in URL.";
-        } else {
-            // 2. Fetch config and Start PeerJS
-            async function initMobile() {
-                let peerConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+            const initPeer = async () => {
+                let config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
                 try {
-                    const response = await fetch('/api/get-ice-servers');
-                    if (response.ok) {
-                        const data = await response.json();
-                        peerConfig = data.config;
-                    }
-                } catch (e) { console.error("ICE fetch error", e); }
+                    const res = await fetch('/api/get-ice-servers');
+                    if (res.ok) config = (await res.json()).config;
+                } catch (e) {}
 
-                const peer = new Peer({ config: peerConfig });
-
+                const peer = new Peer({ config });
                 peer.on('open', () => {
-                document.getElementById('status').innerText = "Linking..." + targetPeerId;
-                connection = peer.connect(targetPeerId);
-                document.getElementById('status').innerText = "Linked to " + targetPeerId;
+                    document.getElementById('status').innerText = "Linking...";
+                    const conn = peer.connect(targetPeerId);
+                    connectionRef.current = conn;
 
-                connection.on('open', () => {
-                    document.getElementById('status').innerText = "Connected! Start Drawing.";
-                    document.getElementById('status').style.color = "#34a853";
-                });
+                    conn.on('open', () => {
+                        document.getElementById('status').innerText = "Connected!";
+                        document.getElementById('status').style.color = "#34a853";
+                    });
 
-                // NEW: Listen for drawing or clearing data FROM the Main Stage
-                connection.on('data', (data) => {
-                    try {
-                        const drawData = JSON.parse(data);
-                        if (drawData.action === 'clear') {
-                            // Clear the mobile canvas
-                            allLines = [];
-                            ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        } else if (drawData.action === 'draw') {
-                            // Draw the incoming line on the mobile canvas
-                            // Scale from Main Stage dimensions to mobile screen
-                            allLines.push(drawData);
-                            const x0 = (drawData.x0 / MAIN_WIDTH) * canvas.width;
-                            const y0 = (drawData.y0 / MAIN_HEIGHT) * canvas.height;
-                            const x1 = (drawData.x1 / MAIN_WIDTH) * canvas.width;
-                            const y1 = (drawData.y1 / MAIN_HEIGHT) * canvas.height;
-                            
-                            ctx.beginPath();
-                            ctx.moveTo(x0, y0);
-                            ctx.lineTo(x1, y1);
-                            ctx.strokeStyle = drawData.color;
-                            ctx.lineWidth = 4;
-                            ctx.lineCap = 'round';
-                            ctx.stroke();
-                            ctx.closePath();
+                    conn.on('data', (data) => {
+                        const msg = JSON.parse(data);
+                        if (msg.action === 'scene-update' && excalidrawAPI) {
+                            isRemoteUpdate.current = true;
+                            excalidrawAPI.updateScene({ elements: msg.elements });
+                            setTimeout(() => isRemoteUpdate.current = false, 100);
                         }
-                    } catch(e) { console.error("Bad data", e); }
+                    });
                 });
-            });
-            }
-            
-            initMobile();
+            };
+
+            const onBoardChange = (elements) => {
+                if (isRemoteUpdate.current || !connectionRef.current?.open) return;
+                connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements }));
+            };
+
+            return React.createElement(
+                "div", 
+                { id: "excalidraw-mobile-wrapper" },
+                React.createElement(ExcalidrawLib.Excalidraw, {
+                    excalidrawAPI: (api) => setExcalidrawAPI(api),
+                    onChange: onBoardChange,
+                    UIOptions: {
+                        canvasActions: {
+                            toggleTheme: false,
+                            export: false,
+                            loadScene: false,
+                            saveToActiveFile: false,
+                            changeViewBackgroundColor: false
+                        },
+                        zoomControls: false
+                    }
+                })
+            );
         }
 
-        // 3. Phone Touch Events for Drawing
-        function getTouchPos(e) {
-            const rect = canvas.getBoundingClientRect();
-            return {
-                x: e.touches[0].clientX - rect.left,
-                y: e.touches[0].clientY - rect.top
-            };
-        }
-
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            isDrawing = true;
-            const pos = getTouchPos(e);
-            lastX = pos.x; lastY = pos.y;
-        });
-
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            if (!isDrawing || !connection || !connection.open) return;
-            
-            const pos = getTouchPos(e);
-            
-            // Draw locally on the phone
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(pos.x, pos.y);
-            ctx.strokeStyle = '#4285F4'; // Mobile draws in Blue
-            ctx.lineWidth = 4;
-            ctx.lineCap = 'round';
-            ctx.stroke();
-
-            // Save segment in normalized stage coordinates
-            const lineData = { 
-                x0: (lastX / canvas.width) * MAIN_WIDTH, 
-                y0: (lastY / canvas.height) * MAIN_HEIGHT, 
-                x1: (pos.x / canvas.width) * MAIN_WIDTH, 
-                y1: (pos.y / canvas.height) * MAIN_HEIGHT, 
-                color: '#4285F4' 
-            };
-            allLines.push(lineData);
-
-            // Send to Google Meet Main Stage
-            const payload = JSON.stringify({ action: 'draw', ...lineData });
-            connection.send(payload);
-
-            lastX = pos.x; lastY = pos.y;
-        });
-
-        canvas.addEventListener('touchend', () => isDrawing = false);
-
-        // NEW: Mobile Clear Button Logic
-        document.getElementById('clear-btn').onclick = () => {
-            // 1. Clear the local mobile canvas
-            allLines = [];
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // 2. Tell the Google Meet Main Stage to clear its canvas too
-            if (connection && connection.open) {
-                connection.send(JSON.stringify({ action: 'clear' }));
-            }
-        };
+        const root = ReactDOM.createRoot(document.getElementById('excalidraw-mobile-wrapper'));
+        root.render(React.createElement(MobileApp));
     </script>
 </body>
 </html>
