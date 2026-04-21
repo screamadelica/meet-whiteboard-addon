@@ -74,10 +74,14 @@
                 connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements }));
             };
 
+            if (!window.ExcalidrawLib) {
+                return React.createElement("div", { style: { padding: "20px" } }, "Loading Drawing Engine...");
+            }
+
             return React.createElement(
                 "div", 
                 { id: "excalidraw-mobile-wrapper" },
-                React.createElement(ExcalidrawLib.Excalidraw, {
+                React.createElement(window.ExcalidrawLib.Excalidraw, {
                     excalidrawAPI: (api) => setExcalidrawAPI(api),
                     onChange: onBoardChange,
                     UIOptions: {
