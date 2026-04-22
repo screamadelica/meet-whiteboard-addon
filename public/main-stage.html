@@ -64,11 +64,27 @@
     <script type="text/javascript">
         const { useState, useEffect, useRef } = React;
 
+        // Custom throttle helper to ensure it exists and works correctly
+        window.throttle = (func, limit, { leading, trailing } = { leading: true, trailing: true }) => {
+            let timer = null;
+            let lastArgs = null;
+            return function(...args) {
+                lastArgs = args;
+                if (timer) return;
+                if (leading) func.apply(this, lastArgs);
+                timer = setTimeout(() => {
+                    if (trailing && !leading) func.apply(this, lastArgs);
+                    timer = null;
+                }, limit);
+            };
+        };
+
         // --- 1. GLOBALS & SETUP ---
         let peer = null;
         let activeConnections = []; 
         let excalidrawEngine = null;
         let isRemoteUpdate = false;
+        let lastSentVersionMap = new Map();
         const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
         
         // Simple throttled full-scene broadcast at 50ms.
@@ -76,12 +92,19 @@
         // UMD bundle cannot be guaranteed and caused silent failures.
         const throttledBroadcast = window.throttle((elements) => {
             if (isRemoteUpdate) return;
+
+            // Only send elements that have changed since last broadcast
+            const updates = elements.filter(el => el.version > (lastSentVersionMap.get(el.id) || -1));
+            if (updates.length === 0) return;
+
             const status = document.getElementById('status-text');
             if (status && elements.length > 0 && status.innerText.includes("ready")) {
                 status.innerText = "Editing...";
             }
-            broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
-        }, 50, { leading: true, trailing: false });
+
+            updates.forEach(el => lastSentVersionMap.set(el.id, el.version));
+            broadcastToPeers(JSON.stringify({ action: 'scene-update', elements: updates, isDiff: true }));
+        }, 50, { leading: true, trailing: true });
 
         // Periodic full rebroadcast every 30s to recover from dropped packets
         setInterval(() => {
@@ -174,6 +197,7 @@
                 if (data.elements && data.elements.length > 0) {
                     console.log("[Main Stage] fetchSavedBoard: Applying saved elements to scene.");
                     isRemoteUpdate = true;
+                    data.elements.forEach(el => lastSentVersionMap.set(el.id, el.version));
                     excalidrawEngine.updateScene({ elements: data.elements });
                     setTimeout(() => { isRemoteUpdate = false; }, 500);
                     document.getElementById('status-text').innerText = "Saved board loaded!";
@@ -282,6 +306,26 @@
                     if (drawData.action === 'scene-update' && excalidrawEngine) {
                         isRemoteUpdate = true;
                         excalidrawEngine.updateScene({ elements: drawData.elements });
+                        
+                        const currentElements = excalidrawEngine.getSceneElements();
+                        let nextElements;
+
+                        if (drawData.isDiff) {
+                            // Merge incoming diff with local elements
+                            const map = new Map(currentElements.map(e => [e.id, e]));
+                            drawData.elements.forEach(remoteEl => {
+                                const localEl = map.get(remoteEl.id);
+                                if (!localEl || remoteEl.version > localEl.version) {
+                                    map.set(remoteEl.id, remoteEl);
+                                }
+                            });
+                            nextElements = Array.from(map.values());
+                        } else {
+                            nextElements = drawData.elements;
+                        }
+
+                        excalidrawEngine.updateScene({ elements: nextElements });
+                        nextElements.forEach(el => lastSentVersionMap.set(el.id, el.version));
                         // Short timeout — just enough to skip the echo onChange,
                         // but not so long it blocks the next local stroke
                         setTimeout(() => { isRemoteUpdate = false; }, 50);
@@ -303,6 +347,7 @@
         document.getElementById('clear-btn').onclick = () => {
             if (!excalidrawEngine) return;
             if (confirm("Clear the entire board?")) {
+                lastSentVersionMap.clear();
                 excalidrawEngine.updateScene({ elements: [] });
                 document.getElementById('status-text').innerText = "Board cleared.";
                 broadcastToPeers(JSON.stringify({ action: 'scene-update', elements: [] }));

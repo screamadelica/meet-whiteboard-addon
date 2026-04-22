@@ -23,9 +23,25 @@
         const urlParams = new URLSearchParams(window.location.search);
         const targetPeerId = urlParams.get('peerId');
 
+        // Custom throttle helper
+        window.throttle = (func, limit, { leading, trailing } = { leading: true, trailing: true }) => {
+            let timer = null;
+            let lastArgs = null;
+            return function(...args) {
+                lastArgs = args;
+                if (timer) return;
+                if (leading) func.apply(this, lastArgs);
+                timer = setTimeout(() => {
+                    if (trailing && !leading) func.apply(this, lastArgs);
+                    timer = null;
+                }, limit);
+            };
+        };
+
         function MobileApp() {
             const excalidrawAPIRef = useRef(null);
             const isRemoteUpdate = useRef(false);
+            const versionMapRef = useRef(new Map());
             const connectionRef = useRef(null);
             const [isLibLoaded, setIsLibLoaded] = useState(false);
 
@@ -79,6 +95,25 @@
                         if (msg.action === 'scene-update' && excalidrawAPIRef.current) {
                             isRemoteUpdate.current = true;
                             excalidrawAPIRef.current.updateScene({ elements: msg.elements });
+                            
+                            const currentElements = excalidrawAPIRef.current.getSceneElements();
+                            let nextElements;
+
+                            if (msg.isDiff) {
+                                const map = new Map(currentElements.map(e => [e.id, e]));
+                                msg.elements.forEach(remoteEl => {
+                                    const localEl = map.get(remoteEl.id);
+                                    if (!localEl || remoteEl.version > localEl.version) {
+                                        map.set(remoteEl.id, remoteEl);
+                                    }
+                                });
+                                nextElements = Array.from(map.values());
+                            } else {
+                                nextElements = msg.elements;
+                            }
+
+                            excalidrawAPIRef.current.updateScene({ elements: nextElements });
+                            nextElements.forEach(el => versionMapRef.current.set(el.id, el.version));
                             // Short timeout — just enough to skip the echo onChange
                             setTimeout(() => { isRemoteUpdate.current = false; }, 50);
                         }
@@ -86,11 +121,20 @@
                 });
             };
 
-            // Full scene, throttled to 50ms with trailing to catch end of stroke
+            // Send only changed elements (diffs) to improve performance
             const onBoardChange = window.throttle((elements) => {
                 if (isRemoteUpdate.current || !connectionRef.current?.open) return;
-                connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements }));
-            }, 50, { leading: true, trailing: false });
+
+                const updates = elements.filter(el => el.version > (versionMapRef.current.get(el.id) || -1));
+                if (updates.length === 0) return;
+
+                updates.forEach(el => versionMapRef.current.set(el.id, el.version));
+                connectionRef.current.send(JSON.stringify({ 
+                    action: 'scene-update', 
+                    elements: updates, 
+                    isDiff: true 
+                }));
+            }, 50, { leading: true, trailing: true });
 
             if (!isLibLoaded) {
                 return React.createElement("div", { style: { padding: "20px" } }, "Loading Drawing Engine...");
