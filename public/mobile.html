@@ -93,9 +93,6 @@
                     conn.on('data', (data) => {
                         const msg = JSON.parse(data);
                         if (msg.action === 'scene-update' && excalidrawAPIRef.current) {
-                            isRemoteUpdate.current = true;
-                            excalidrawAPIRef.current.updateScene({ elements: msg.elements });
-                            
                             const currentElements = excalidrawAPIRef.current.getSceneElements();
                             let nextElements;
 
@@ -112,6 +109,7 @@
                                 nextElements = msg.elements;
                             }
 
+                            isRemoteUpdate.current = true;
                             excalidrawAPIRef.current.updateScene({ elements: nextElements });
                             nextElements.forEach(el => versionMapRef.current.set(el.id, el.version));
                             // Short timeout — just enough to skip the echo onChange

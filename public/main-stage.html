@@ -304,9 +304,6 @@
                 try {
                     const drawData = JSON.parse(data);
                     if (drawData.action === 'scene-update' && excalidrawEngine) {
-                        isRemoteUpdate = true;
-                        excalidrawEngine.updateScene({ elements: drawData.elements });
-                        
                         const currentElements = excalidrawEngine.getSceneElements();
                         let nextElements;
 
@@ -324,6 +321,7 @@
                             nextElements = drawData.elements;
                         }
 
+                        isRemoteUpdate = true;
                         excalidrawEngine.updateScene({ elements: nextElements });
                         nextElements.forEach(el => lastSentVersionMap.set(el.id, el.version));
                         // Short timeout — just enough to skip the echo onChange,
