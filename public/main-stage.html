@@ -71,19 +71,11 @@
         let isRemoteUpdate = false;
         const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
         
-        // --- SYNC STRATEGY (mirrors Excalidraw's own collab implementation) ---
-        // 1. Only broadcast when getSceneVersion(elements) increases — skips no-op onChange fires
-        // 2. Receiver uses reconcileElements() to merge remote changes correctly
-        // 3. Full scene rebroadcast every 30s to recover from any dropped packets
-        let lastBroadcastVersion = -1;
-
-        const throttledBroadcast = window.throttle((elements, appState) => {
+        // Simple throttled full-scene broadcast at 50ms.
+        // We avoid getSceneVersion/reconcileElements as their availability in the
+        // UMD bundle cannot be guaranteed and caused silent failures.
+        const throttledBroadcast = window.throttle((elements) => {
             if (isRemoteUpdate) return;
-            const lib = window.ExcalidrawLib || window.Excalidraw;
-            if (!lib) return;
-            const version = lib.getSceneVersion(elements);
-            if (version <= lastBroadcastVersion) return; // nothing actually changed
-            lastBroadcastVersion = version;
             const status = document.getElementById('status-text');
             if (status && elements.length > 0 && status.innerText.includes("ready")) {
                 status.innerText = "Editing...";
@@ -91,10 +83,9 @@
             broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
         }, 50, { leading: true, trailing: true });
 
-        // Periodic full rebroadcast every 30s to recover from any dropped packets
+        // Periodic full rebroadcast every 30s to recover from dropped packets
         setInterval(() => {
             if (!excalidrawEngine || activeConnections.length === 0) return;
-            lastBroadcastVersion = -1; // force send regardless of version
             const elements = excalidrawEngine.getSceneElements();
             broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
         }, 30000);
@@ -110,10 +101,9 @@
                 let checkInterval = setInterval(() => {
                     attempts++;
                     // Check for multiple possible global names used by different UMD builds
-                    let lib = window.ExcalidrawLib || window.Excalidraw;
+                    const lib = window.ExcalidrawLib || window.Excalidraw;
                     if (lib) {
                         console.log(`[React] Library found on window as '${window.ExcalidrawLib ? 'ExcalidrawLib' : 'Excalidraw'}' after ${attempts} attempts.`);
-                        window.ExcalidrawLib = lib; // Normalize for the rest of the app
                         setIsLibLoaded(true);
                         clearInterval(checkInterval);
                     } else if (attempts > 50) {
@@ -290,15 +280,11 @@
                 try {
                     const drawData = JSON.parse(data);
                     if (drawData.action === 'scene-update' && excalidrawEngine) {
-                        const lib = window.ExcalidrawLib;
-                        if (!lib) return;
                         isRemoteUpdate = true;
-                        const localElements = excalidrawEngine.getSceneElements();
-                        const appState = excalidrawEngine.getAppState();
-                        const reconciledElements = lib.reconcileElements(localElements, drawData.elements, appState);
-                        lastBroadcastVersion = lib.getSceneVersion(reconciledElements); // Echo prevention
-                        excalidrawEngine.updateScene({ elements: reconciledElements });
-                        setTimeout(() => isRemoteUpdate = false, 50);
+                        excalidrawEngine.updateScene({ elements: drawData.elements });
+                        // Short timeout — just enough to skip the echo onChange,
+                        // but not so long it blocks the next local stroke
+                        setTimeout(() => { isRemoteUpdate = false; }, 50);
                         activeConnections.forEach(otherConn => {
                             if (otherConn.open && otherConn.peer !== conn.peer) otherConn.send(data);
                         });
