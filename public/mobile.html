@@ -23,7 +23,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const targetPeerId = urlParams.get('peerId');
 
-        // --- DIFF-BASED SYNC (mirrors main-stage logic) ---
+        // --- DIFF-BASED SYNC ---
         let prevElementMap = {};
 
         function diffElements(nextElements) {
@@ -43,16 +43,16 @@
             return changed;
         }
 
-        function applyPatch(patch, excalidrawAPIRef) {
-            if (!excalidrawAPIRef.current) return;
-            const current = excalidrawAPIRef.current.getSceneElements();
+        function applyPatch(patch, apiRef) {
+            if (!apiRef.current) return;
+            const current = apiRef.current.getSceneElements();
             const currentMap = {};
             for (const el of current) currentMap[el.id] = el;
             for (const el of patch) {
                 if (el.isDeleted) delete currentMap[el.id];
                 else currentMap[el.id] = el;
             }
-            excalidrawAPIRef.current.updateScene({ elements: Object.values(currentMap) });
+            apiRef.current.updateScene({ elements: Object.values(currentMap) });
         }
 
         function MobileApp() {
@@ -107,15 +107,16 @@
 
                     conn.on('data', (data) => {
                         const msg = JSON.parse(data);
-                        if (msg.action === 'patch-update' && excalidrawAPIRef.current) {
-                            isRemoteUpdate.current = true;
-                            applyPatch(msg.patch, excalidrawAPIRef);
-                            setTimeout(() => isRemoteUpdate.current = false, 150);
-                        } else if (msg.action === 'scene-update' && excalidrawAPIRef.current) {
-                            // Full scene reset (e.g. clear board)
+                        if (msg.action === 'scene-update' && excalidrawAPIRef.current) {
+                            // Full snapshot — replace entire scene and reset diff tracking
                             isRemoteUpdate.current = true;
                             excalidrawAPIRef.current.updateScene({ elements: msg.elements });
                             prevElementMap = {};
+                            setTimeout(() => isRemoteUpdate.current = false, 150);
+                        } else if (msg.action === 'patch-update' && excalidrawAPIRef.current) {
+                            // Incremental patch — merge only changed elements
+                            isRemoteUpdate.current = true;
+                            applyPatch(msg.patch, excalidrawAPIRef);
                             setTimeout(() => isRemoteUpdate.current = false, 150);
                         }
                     });
@@ -128,7 +129,7 @@
                 const patch = diffElements(elements);
                 if (patch.length === 0) return;
                 connectionRef.current.send(JSON.stringify({ action: 'patch-update', patch }));
-            }, 150, { leading: true, trailing: false });
+            }, 150, { leading: true, trailing: true });
 
             if (!isLibLoaded) {
                 return React.createElement("div", { style: { padding: "20px" } }, "Loading Drawing Engine...");
