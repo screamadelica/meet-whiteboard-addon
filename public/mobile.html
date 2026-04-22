@@ -25,22 +25,21 @@
 
         // --- DIFF-BASED SYNC ---
         let prevElementMap = {};
+        let pendingPatch = {};
 
-        function diffElements(nextElements) {
+        function accumulateDiff(nextElements) {
             const nextMap = {};
-            const changed = [];
             for (const el of nextElements) {
                 nextMap[el.id] = el;
                 const prev = prevElementMap[el.id];
                 if (!prev || prev.version !== el.version || prev.versionNonce !== el.versionNonce) {
-                    changed.push(el);
+                    pendingPatch[el.id] = el;
                 }
             }
             for (const id in prevElementMap) {
-                if (!nextMap[id]) changed.push({ ...prevElementMap[id], isDeleted: true });
+                if (!nextMap[id]) pendingPatch[id] = { ...prevElementMap[id], isDeleted: true };
             }
             prevElementMap = nextMap;
-            return changed;
         }
 
         function applyPatch(patch, apiRef) {
@@ -112,6 +111,7 @@
                             isRemoteUpdate.current = true;
                             excalidrawAPIRef.current.updateScene({ elements: msg.elements });
                             prevElementMap = {};
+                            pendingPatch = {};
                             setTimeout(() => isRemoteUpdate.current = false, 150);
                         } else if (msg.action === 'patch-update' && excalidrawAPIRef.current) {
                             // Incremental patch — merge only changed elements
@@ -123,13 +123,20 @@
                 });
             };
 
-            // Throttle with leading+trailing so fast strokes always send their final position
-            const onBoardChange = window.throttle((elements) => {
+            // onChange: accumulate diff on EVERY call (unthrottled), send on throttle
+            const flushPatch = window.throttle(() => {
                 if (isRemoteUpdate.current || !connectionRef.current?.open) return;
-                const patch = diffElements(elements);
+                const patch = Object.values(pendingPatch);
+                pendingPatch = {};
                 if (patch.length === 0) return;
                 connectionRef.current.send(JSON.stringify({ action: 'patch-update', patch }));
             }, 150, { leading: true, trailing: true });
+
+            const onBoardChange = (elements) => {
+                if (isRemoteUpdate.current) return;
+                accumulateDiff(elements); // always track — never skip
+                flushPatch();             // send at most every 150ms
+            };
 
             if (!isLibLoaded) {
                 return React.createElement("div", { style: { padding: "20px" } }, "Loading Drawing Engine...");

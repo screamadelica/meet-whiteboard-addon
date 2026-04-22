@@ -72,26 +72,34 @@
         const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
         
         // --- DIFF-BASED SYNC ---
-        // prevElementMap tracks last known version of each element by ID.
-        // On every onChange we only send elements that are new or modified.
+        // prevElementMap tracks the last sent version of each element.
+        // pendingPatch accumulates ALL changes between throttle fires so nothing is lost.
         let prevElementMap = {};
+        let pendingPatch = {}; // keyed by element ID so later versions overwrite earlier ones
 
-        function diffElements(nextElements) {
+        function accumulateDiff(nextElements) {
             const nextMap = {};
-            const changed = [];
             for (const el of nextElements) {
                 nextMap[el.id] = el;
                 const prev = prevElementMap[el.id];
                 if (!prev || prev.version !== el.version || prev.versionNonce !== el.versionNonce) {
-                    changed.push(el);
+                    pendingPatch[el.id] = el; // overwrite with latest version
                 }
             }
             // Detect deletions
             for (const id in prevElementMap) {
-                if (!nextMap[id]) changed.push({ ...prevElementMap[id], isDeleted: true });
+                if (!nextMap[id]) pendingPatch[id] = { ...prevElementMap[id], isDeleted: true };
             }
             prevElementMap = nextMap;
-            return changed;
+        }
+
+        // Flush accumulated patch to peers, called on throttle
+        function flushPatch() {
+            if (isRemoteUpdate) return;
+            const patch = Object.values(pendingPatch);
+            pendingPatch = {};
+            if (patch.length === 0) return;
+            broadcastToPeers(JSON.stringify({ action: 'patch-update', patch }));
         }
 
         // Merge a patch into the current scene by element ID
@@ -107,17 +115,18 @@
             excalidrawEngine.updateScene({ elements: Object.values(currentMap) });
         }
 
-        // Throttle with leading+trailing so fast strokes always send their final position
-        const throttledBroadcast = window.throttle((elements) => {
+        const throttledFlush = window.throttle(flushPatch, 150, { leading: true, trailing: true });
+
+        // onChange: accumulate diff on EVERY call (unthrottled), send on throttle
+        function onSceneChange(elements) {
             if (isRemoteUpdate) return;
             const status = document.getElementById('status-text');
             if (status && elements.length > 0 && status.innerText.includes("ready")) {
                 status.innerText = "Editing...";
             }
-            const patch = diffElements(elements);
-            if (patch.length === 0) return;
-            broadcastToPeers(JSON.stringify({ action: 'patch-update', patch }));
-        }, 150, { leading: true, trailing: true });
+            accumulateDiff(elements); // always track — never skip
+            throttledFlush();         // send at most every 150ms
+        }
 
         // Initialize Excalidraw Component
         function MainApp(props) {
@@ -166,7 +175,7 @@
                         setEngineReady(true);
                     }
                 },
-                onChange: throttledBroadcast
+                onChange: onSceneChange
             });
         }
         
@@ -342,6 +351,7 @@
             if (confirm("Clear the entire board?")) {
                 excalidrawEngine.updateScene({ elements: [] });
                 prevElementMap = {};
+                pendingPatch = {};
                 document.getElementById('status-text').innerText = "Board cleared.";
                 broadcastToPeers(JSON.stringify({ action: 'scene-update', elements: [] }));
             }
