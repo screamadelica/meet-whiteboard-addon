@@ -23,8 +23,40 @@
         const urlParams = new URLSearchParams(window.location.search);
         const targetPeerId = urlParams.get('peerId');
 
+        // --- DIFF-BASED SYNC (mirrors main-stage logic) ---
+        let prevElementMap = {};
+
+        function diffElements(nextElements) {
+            const nextMap = {};
+            const changed = [];
+            for (const el of nextElements) {
+                nextMap[el.id] = el;
+                const prev = prevElementMap[el.id];
+                if (!prev || prev.version !== el.version || prev.versionNonce !== el.versionNonce) {
+                    changed.push(el);
+                }
+            }
+            for (const id in prevElementMap) {
+                if (!nextMap[id]) changed.push({ ...prevElementMap[id], isDeleted: true });
+            }
+            prevElementMap = nextMap;
+            return changed;
+        }
+
+        function applyPatch(patch, excalidrawAPIRef) {
+            if (!excalidrawAPIRef.current) return;
+            const current = excalidrawAPIRef.current.getSceneElements();
+            const currentMap = {};
+            for (const el of current) currentMap[el.id] = el;
+            for (const el of patch) {
+                if (el.isDeleted) delete currentMap[el.id];
+                else currentMap[el.id] = el;
+            }
+            excalidrawAPIRef.current.updateScene({ elements: Object.values(currentMap) });
+        }
+
         function MobileApp() {
-            const excalidrawAPIRef = useRef(null); // ref instead of state — always current in callbacks
+            const excalidrawAPIRef = useRef(null);
             const isRemoteUpdate = useRef(false);
             const connectionRef = useRef(null);
             const [isLibLoaded, setIsLibLoaded] = useState(false);
@@ -38,7 +70,7 @@
                     if (lib) {
                         setIsLibLoaded(true);
                     } else if (attempts < 100) {
-                        setTimeout(checkLib, 100); 
+                        setTimeout(checkLib, 100);
                     } else {
                         console.error("[Mobile] Library polling timeout.");
                     }
@@ -46,8 +78,6 @@
                 checkLib();
             }, []);
 
-            // Wait for lib to be loaded before connecting peer,
-            // so excalidrawAPIRef.current is set before data arrives
             useEffect(() => {
                 if (!isLibLoaded) return;
                 if (targetPeerId) {
@@ -77,20 +107,28 @@
 
                     conn.on('data', (data) => {
                         const msg = JSON.parse(data);
-                        // Use ref so we always read the latest API instance, not a stale closure
-                        if (msg.action === 'scene-update' && excalidrawAPIRef.current) {
+                        if (msg.action === 'patch-update' && excalidrawAPIRef.current) {
+                            isRemoteUpdate.current = true;
+                            applyPatch(msg.patch, excalidrawAPIRef);
+                            setTimeout(() => isRemoteUpdate.current = false, 150);
+                        } else if (msg.action === 'scene-update' && excalidrawAPIRef.current) {
+                            // Full scene reset (e.g. clear board)
                             isRemoteUpdate.current = true;
                             excalidrawAPIRef.current.updateScene({ elements: msg.elements });
-                            setTimeout(() => isRemoteUpdate.current = false, 50);
+                            prevElementMap = {};
+                            setTimeout(() => isRemoteUpdate.current = false, 150);
                         }
                     });
                 });
             };
 
+            // Throttle with leading+trailing so fast strokes always send their final position
             const onBoardChange = window.throttle((elements) => {
                 if (isRemoteUpdate.current || !connectionRef.current?.open) return;
-                connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements }));
-            }, 50, { leading: true, trailing: false });
+                const patch = diffElements(elements);
+                if (patch.length === 0) return;
+                connectionRef.current.send(JSON.stringify({ action: 'patch-update', patch }));
+            }, 150, { leading: true, trailing: false });
 
             if (!isLibLoaded) {
                 return React.createElement("div", { style: { padding: "20px" } }, "Loading Drawing Engine...");
@@ -98,10 +136,10 @@
 
             const lib = window.ExcalidrawLib || window.Excalidraw;
             return React.createElement(
-                "div", 
+                "div",
                 { id: "excalidraw-mobile-wrapper" },
                 React.createElement(lib.Excalidraw, {
-                    excalidrawAPI: (api) => { excalidrawAPIRef.current = api; }, // store in ref, not state
+                    excalidrawAPI: (api) => { excalidrawAPIRef.current = api; },
                     onChange: onBoardChange,
                     UIOptions: {
                         canvasActions: {

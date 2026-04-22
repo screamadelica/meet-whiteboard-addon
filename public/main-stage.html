@@ -5,7 +5,6 @@
     
     <!-- Bundled locally to avoid Google Meet CSP restrictions -->
     <script src="/static/excalidraw-bundle.js"></script>
-
     <script src="https://www.gstatic.com/meetjs/addons/1.1.0/meet.addons.js"></script>
     <style>
         body { font-family: sans-serif; margin: 0; padding: 0; background: #e8eaed; height: 100vh; overflow: hidden; }
@@ -72,15 +71,63 @@
         let isRemoteUpdate = false;
         const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
         
-        // Throttle broadcasts to every 150ms to reduce lag
+        // --- DIFF-BASED SYNC ---
+        // Track the last known version of each element by ID.
+        // On every onChange we only send elements that are new, changed, or deleted.
+        let prevElementMap = {};
+
+        function diffElements(nextElements) {
+            const nextMap = {};
+            const changed = [];
+
+            for (const el of nextElements) {
+                nextMap[el.id] = el;
+                const prev = prevElementMap[el.id];
+                // New element, or version/seed changed (i.e. it was modified)
+                if (!prev || prev.version !== el.version || prev.versionNonce !== el.versionNonce) {
+                    changed.push(el);
+                }
+            }
+
+            // Detect deletions — send the element with isDeleted:true so receivers remove it
+            for (const id in prevElementMap) {
+                if (!nextMap[id]) {
+                    changed.push({ ...prevElementMap[id], isDeleted: true });
+                }
+            }
+
+            prevElementMap = nextMap;
+            return changed;
+        }
+
+        // On the receiving end, merge a patch of changed elements into the current scene
+        function applyPatch(patch) {
+            if (!excalidrawEngine) return;
+            const current = excalidrawEngine.getSceneElements();
+            const currentMap = {};
+            for (const el of current) currentMap[el.id] = el;
+
+            for (const el of patch) {
+                if (el.isDeleted) {
+                    delete currentMap[el.id];
+                } else {
+                    currentMap[el.id] = el;
+                }
+            }
+            excalidrawEngine.updateScene({ elements: Object.values(currentMap) });
+        }
+
+        // Throttle with leading+trailing so fast strokes always send their final position
         const throttledBroadcast = window.throttle((elements) => {
             if (isRemoteUpdate) return;
             const status = document.getElementById('status-text');
             if (status && elements.length > 0 && status.innerText.includes("ready")) {
                 status.innerText = "Editing...";
             }
-            broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
-        }, 50, { leading: true, trailing: false });
+            const patch = diffElements(elements);
+            if (patch.length === 0) return; // nothing changed, skip send
+            broadcastToPeers(JSON.stringify({ action: 'patch-update', patch }));
+        }, 150, { leading: true, trailing: false });
 
         // Initialize Excalidraw Component
         function MainApp(props) {
@@ -266,18 +313,22 @@
             conn.on('data', (data) => {
                 try {
                     const drawData = JSON.parse(data);
-                    if (drawData.action === 'scene-update' && excalidrawEngine) {
+                    if (drawData.action === 'patch-update' && excalidrawEngine) {
+                        isRemoteUpdate = true;
+                        applyPatch(drawData.patch);
+                        setTimeout(() => isRemoteUpdate = false, 150);
+                        // Relay patch to all other peers
+                        activeConnections.forEach(otherConn => {
+                            if (otherConn.open && otherConn.peer !== conn.peer) otherConn.send(data);
+                        });
+                    } else if (drawData.action === 'scene-update' && excalidrawEngine) {
+                        // Used by clear-board which sends a full empty scene
                         isRemoteUpdate = true;
                         excalidrawEngine.updateScene({ elements: drawData.elements });
-                        setTimeout(() => isRemoteUpdate = false, 50);
-
-                        // Relay this drawing to everyone else in the Meet room!
-                        // (Except the person/phone who just sent it to us)
-                        console.log(`[Main Stage] Received scene update from ${conn.peer}. Relaying...`);
+                        prevElementMap = {}; // reset diff tracking after a clear
+                        setTimeout(() => isRemoteUpdate = false, 150);
                         activeConnections.forEach(otherConn => {
-                            if (otherConn.open && otherConn.peer !== conn.peer) {
-                                otherConn.send(data);
-                            }
+                            if (otherConn.open && otherConn.peer !== conn.peer) otherConn.send(data);
                         });
                     }
                 } catch(e) { console.error("Bad data received", e); }
@@ -295,6 +346,7 @@
             if (!excalidrawEngine) return;
             if (confirm("Clear the entire board?")) {
                 excalidrawEngine.updateScene({ elements: [] });
+                prevElementMap = {}; // reset diff tracking
                 document.getElementById('status-text').innerText = "Board cleared.";
                 broadcastToPeers(JSON.stringify({ action: 'scene-update', elements: [] }));
             }
