@@ -90,7 +90,7 @@
             const onBoardChange = window.throttle((elements) => {
                 if (isRemoteUpdate.current || !connectionRef.current?.open) return;
                 connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements }));
-            }, 50, { leading: true, trailing: true });
+            }, 50, { leading: true, trailing: false });
 
             if (!isLibLoaded) {
                 return React.createElement("div", { style: { padding: "20px" } }, "Loading Drawing Engine...");
