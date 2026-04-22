@@ -26,6 +26,9 @@
         // --- DIFF-BASED SYNC ---
         let prevElementMap = {};
         let pendingPatch = {};
+        // receivedElementMap is the authoritative store of what we received from peers.
+        // We never call getSceneElements() to merge — that misses in-progress strokes.
+        let receivedElementMap = {};
 
         function accumulateDiff(nextElements) {
             const nextMap = {};
@@ -44,14 +47,11 @@
 
         function applyPatch(patch, apiRef) {
             if (!apiRef.current) return;
-            const current = apiRef.current.getSceneElements();
-            const currentMap = {};
-            for (const el of current) currentMap[el.id] = el;
             for (const el of patch) {
-                if (el.isDeleted) delete currentMap[el.id];
-                else currentMap[el.id] = el;
+                if (el.isDeleted) delete receivedElementMap[el.id];
+                else receivedElementMap[el.id] = el;
             }
-            apiRef.current.updateScene({ elements: Object.values(currentMap) });
+            apiRef.current.updateScene({ elements: Object.values(receivedElementMap) });
         }
 
         function MobileApp() {
@@ -110,6 +110,9 @@
                             // Full snapshot — replace entire scene and reset diff tracking
                             isRemoteUpdate.current = true;
                             excalidrawAPIRef.current.updateScene({ elements: msg.elements });
+                            // Seed receivedElementMap with the full snapshot
+                            receivedElementMap = {};
+                            for (const el of msg.elements) receivedElementMap[el.id] = el;
                             prevElementMap = {};
                             pendingPatch = {};
                             setTimeout(() => isRemoteUpdate.current = false, 150);
