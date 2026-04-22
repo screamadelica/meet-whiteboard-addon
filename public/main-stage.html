@@ -80,7 +80,7 @@
                 status.innerText = "Editing...";
             }
             broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
-        }, 50, { leading: true, trailing: true });
+        }, 50, { leading: true, trailing: false });
 
         // Initialize Excalidraw Component
         function MainApp(props) {
