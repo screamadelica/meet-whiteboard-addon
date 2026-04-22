@@ -72,6 +72,16 @@
         let isRemoteUpdate = false;
         const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
         
+        // Throttle broadcasts to every 150ms to reduce lag
+        const throttledBroadcast = window.throttle((elements) => {
+            if (isRemoteUpdate) return;
+            const status = document.getElementById('status-text');
+            if (status && elements.length > 0 && status.innerText.includes("ready")) {
+                status.innerText = "Editing...";
+            }
+            broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
+        }, 150);
+
         // Initialize Excalidraw Component
         function MainApp(props) {
             const [isLibLoaded, setIsLibLoaded] = useState(false);
@@ -119,15 +129,7 @@
                         setEngineReady(true);
                     }
                 },
-                onChange: (elements) => {
-                    if (isRemoteUpdate) return;
-                    // Clear the "Ready" status once the user starts drawing
-                    const status = document.getElementById('status-text');
-                    if (elements.length > 0 && status.innerText.includes("ready")) {
-                        status.innerText = "Editing...";
-                    }
-                    broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
-                }
+                onChange: throttledBroadcast
             });
         }
         

@@ -87,10 +87,10 @@
                 });
             };
 
-            const onBoardChange = (elements) => {
+            const onBoardChange = window.throttle((elements) => {
                 if (isRemoteUpdate.current || !connectionRef.current?.open) return;
                 connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements }));
-            };
+            }, 150);
 
             if (!isLibLoaded) {
                 return React.createElement("div", { style: { padding: "20px" } }, "Loading Drawing Engine...");
