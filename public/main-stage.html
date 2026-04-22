@@ -79,8 +79,9 @@
 
         const throttledBroadcast = window.throttle((elements, appState) => {
             if (isRemoteUpdate) return;
-            const { getSceneVersion } = window.ExcalidrawLib;
-            const version = getSceneVersion(elements);
+            const lib = window.ExcalidrawLib || window.Excalidraw;
+            if (!lib) return;
+            const version = lib.getSceneVersion(elements);
             if (version <= lastBroadcastVersion) return; // nothing actually changed
             lastBroadcastVersion = version;
             const status = document.getElementById('status-text');
@@ -88,7 +89,7 @@
                 status.innerText = "Editing...";
             }
             broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
-        }, 50, { leading: true, trailing: false });
+        }, 50, { leading: true, trailing: true });
 
         // Periodic full rebroadcast every 30s to recover from any dropped packets
         setInterval(() => {
@@ -109,9 +110,10 @@
                 let checkInterval = setInterval(() => {
                     attempts++;
                     // Check for multiple possible global names used by different UMD builds
-                    const lib = window.ExcalidrawLib || window.Excalidraw;
+                    let lib = window.ExcalidrawLib || window.Excalidraw;
                     if (lib) {
                         console.log(`[React] Library found on window as '${window.ExcalidrawLib ? 'ExcalidrawLib' : 'Excalidraw'}' after ${attempts} attempts.`);
+                        window.ExcalidrawLib = lib; // Normalize for the rest of the app
                         setIsLibLoaded(true);
                         clearInterval(checkInterval);
                     } else if (attempts > 50) {
@@ -288,13 +290,15 @@
                 try {
                     const drawData = JSON.parse(data);
                     if (drawData.action === 'scene-update' && excalidrawEngine) {
+                        const lib = window.ExcalidrawLib;
+                        if (!lib) return;
                         isRemoteUpdate = true;
-                        const { reconcileElements } = window.ExcalidrawLib;
                         const localElements = excalidrawEngine.getSceneElements();
                         const appState = excalidrawEngine.getAppState();
-                        const reconciledElements = reconcileElements(localElements, drawData.elements, appState);
+                        const reconciledElements = lib.reconcileElements(localElements, drawData.elements, appState);
+                        lastBroadcastVersion = lib.getSceneVersion(reconciledElements); // Echo prevention
                         excalidrawEngine.updateScene({ elements: reconciledElements });
-                        setTimeout(() => isRemoteUpdate = false, 150);
+                        setTimeout(() => isRemoteUpdate = false, 50);
                         activeConnections.forEach(otherConn => {
                             if (otherConn.open && otherConn.peer !== conn.peer) otherConn.send(data);
                         });

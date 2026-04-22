@@ -19,13 +19,14 @@
 </body>
 
     <script type="text/javascript">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useMemo } = React;
         const urlParams = new URLSearchParams(window.location.search);
         const targetPeerId = urlParams.get('peerId');
 
         function MobileApp() {
             const excalidrawAPIRef = useRef(null);
             const isRemoteUpdate = useRef(false);
+            const lastBroadcastVersion = useRef(-1);
             const connectionRef = useRef(null);
             const [isLibLoaded, setIsLibLoaded] = useState(false);
 
@@ -34,8 +35,9 @@
                 let attempts = 0;
                 const checkLib = () => {
                     attempts++;
-                    const lib = window.ExcalidrawLib || window.Excalidraw;
+                    let lib = window.ExcalidrawLib || window.Excalidraw;
                     if (lib) {
+                        window.ExcalidrawLib = lib;
                         setIsLibLoaded(true);
                     } else if (attempts < 100) {
                         setTimeout(checkLib, 100);
@@ -75,30 +77,34 @@
                     });
 
                     conn.on('data', (data) => {
-                        const msg = JSON.parse(data);
-                        if (msg.action === 'scene-update' && excalidrawAPIRef.current) {
-                            isRemoteUpdate.current = true;
-                            const { reconcileElements } = window.ExcalidrawLib;
-                            const localElements = excalidrawAPIRef.current.getSceneElements();
-                            const appState = excalidrawAPIRef.current.getAppState();
-                            const reconciledElements = reconcileElements(localElements, msg.elements, appState);
-                            excalidrawAPIRef.current.updateScene({ elements: reconciledElements });
-                            setTimeout(() => isRemoteUpdate.current = false, 150);
-                        }
+                        try {
+                            const msg = JSON.parse(data);
+                            if (msg.action === 'scene-update' && excalidrawAPIRef.current) {
+                                const lib = window.ExcalidrawLib;
+                                if (!lib) return;
+                                isRemoteUpdate.current = true;
+                                const localElements = excalidrawAPIRef.current.getSceneElements();
+                                const appState = excalidrawAPIRef.current.getAppState();
+                                const reconciledElements = lib.reconcileElements(localElements, msg.elements, appState);
+                                lastBroadcastVersion.current = lib.getSceneVersion(reconciledElements);
+                                excalidrawAPIRef.current.updateScene({ elements: reconciledElements });
+                                setTimeout(() => isRemoteUpdate.current = false, 50);
+                            }
+                        } catch (e) { console.error("Sync error", e); }
                     });
                 });
             };
 
             // Only send when getSceneVersion increases — skips no-op onChange fires
-            let lastBroadcastVersion = -1;
-            const onBoardChange = window.throttle((elements) => {
+            const onBoardChange = useMemo(() => window.throttle((elements) => {
                 if (isRemoteUpdate.current || !connectionRef.current?.open) return;
-                const { getSceneVersion } = window.ExcalidrawLib;
-                const version = getSceneVersion(elements);
-                if (version <= lastBroadcastVersion) return;
-                lastBroadcastVersion = version;
+                const lib = window.ExcalidrawLib;
+                if (!lib) return;
+                const version = lib.getSceneVersion(elements);
+                if (version <= lastBroadcastVersion.current) return;
+                lastBroadcastVersion.current = version;
                 connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements }));
-            }, 50, { leading: true, trailing: false });
+            }, 50, { leading: true, trailing: true }), []);
 
             if (!isLibLoaded) {
                 return React.createElement("div", { style: { padding: "20px" } }, "Loading Drawing Engine...");
