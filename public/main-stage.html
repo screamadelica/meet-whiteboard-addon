@@ -71,18 +71,32 @@
         let isRemoteUpdate = false;
         const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
         
-        // Send the full scene on every onChange, throttled to 50ms.
-        // Diff approaches don't work with Excalidraw: freehand strokes update the
-        // same element continuously without incrementing `version` until the stroke
-        // is committed — so any version-based diff misses the entire stroke in progress.
-        const throttledBroadcast = window.throttle((elements) => {
+        // --- SYNC STRATEGY (mirrors Excalidraw's own collab implementation) ---
+        // 1. Only broadcast when getSceneVersion(elements) increases — skips no-op onChange fires
+        // 2. Receiver uses reconcileElements() to merge remote changes correctly
+        // 3. Full scene rebroadcast every 30s to recover from any dropped packets
+        let lastBroadcastVersion = -1;
+
+        const throttledBroadcast = window.throttle((elements, appState) => {
             if (isRemoteUpdate) return;
+            const { getSceneVersion } = window.ExcalidrawLib;
+            const version = getSceneVersion(elements);
+            if (version <= lastBroadcastVersion) return; // nothing actually changed
+            lastBroadcastVersion = version;
             const status = document.getElementById('status-text');
             if (status && elements.length > 0 && status.innerText.includes("ready")) {
                 status.innerText = "Editing...";
             }
             broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
         }, 50, { leading: true, trailing: false });
+
+        // Periodic full rebroadcast every 30s to recover from any dropped packets
+        setInterval(() => {
+            if (!excalidrawEngine || activeConnections.length === 0) return;
+            lastBroadcastVersion = -1; // force send regardless of version
+            const elements = excalidrawEngine.getSceneElements();
+            broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
+        }, 30000);
 
         // Initialize Excalidraw Component
         function MainApp(props) {
@@ -275,9 +289,12 @@
                     const drawData = JSON.parse(data);
                     if (drawData.action === 'scene-update' && excalidrawEngine) {
                         isRemoteUpdate = true;
-                        excalidrawEngine.updateScene({ elements: drawData.elements });
+                        const { reconcileElements } = window.ExcalidrawLib;
+                        const localElements = excalidrawEngine.getSceneElements();
+                        const appState = excalidrawEngine.getAppState();
+                        const reconciledElements = reconcileElements(localElements, drawData.elements, appState);
+                        excalidrawEngine.updateScene({ elements: reconciledElements });
                         setTimeout(() => isRemoteUpdate = false, 150);
-                        // Relay to all other peers
                         activeConnections.forEach(otherConn => {
                             if (otherConn.open && otherConn.peer !== conn.peer) otherConn.send(data);
                         });

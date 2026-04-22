@@ -78,17 +78,25 @@
                         const msg = JSON.parse(data);
                         if (msg.action === 'scene-update' && excalidrawAPIRef.current) {
                             isRemoteUpdate.current = true;
-                            excalidrawAPIRef.current.updateScene({ elements: msg.elements });
+                            const { reconcileElements } = window.ExcalidrawLib;
+                            const localElements = excalidrawAPIRef.current.getSceneElements();
+                            const appState = excalidrawAPIRef.current.getAppState();
+                            const reconciledElements = reconcileElements(localElements, msg.elements, appState);
+                            excalidrawAPIRef.current.updateScene({ elements: reconciledElements });
                             setTimeout(() => isRemoteUpdate.current = false, 150);
                         }
                     });
                 });
             };
 
-            // Send full scene throttled to 50ms — diff approaches don't work because
-            // Excalidraw does not increment element version during in-progress strokes
+            // Only send when getSceneVersion increases — skips no-op onChange fires
+            let lastBroadcastVersion = -1;
             const onBoardChange = window.throttle((elements) => {
                 if (isRemoteUpdate.current || !connectionRef.current?.open) return;
+                const { getSceneVersion } = window.ExcalidrawLib;
+                const version = getSceneVersion(elements);
+                if (version <= lastBroadcastVersion) return;
+                lastBroadcastVersion = version;
                 connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements }));
             }, 50, { leading: true, trailing: false });
 
