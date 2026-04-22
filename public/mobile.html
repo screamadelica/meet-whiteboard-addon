@@ -81,7 +81,7 @@
                         if (msg.action === 'scene-update' && excalidrawAPIRef.current) {
                             isRemoteUpdate.current = true;
                             excalidrawAPIRef.current.updateScene({ elements: msg.elements });
-                            setTimeout(() => isRemoteUpdate.current = false, 100);
+                            setTimeout(() => isRemoteUpdate.current = false, 50);
                         }
                     });
                 });
@@ -90,7 +90,7 @@
             const onBoardChange = window.throttle((elements) => {
                 if (isRemoteUpdate.current || !connectionRef.current?.open) return;
                 connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements }));
-            }, 150);
+            }, 50, { leading: true, trailing: true });
 
             if (!isLibLoaded) {
                 return React.createElement("div", { style: { padding: "20px" } }, "Loading Drawing Engine...");

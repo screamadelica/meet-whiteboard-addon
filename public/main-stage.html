@@ -80,7 +80,7 @@
                 status.innerText = "Editing...";
             }
             broadcastToPeers(JSON.stringify({ action: 'scene-update', elements }));
-        }, 150);
+        }, 50, { leading: true, trailing: true });
 
         // Initialize Excalidraw Component
         function MainApp(props) {
@@ -269,7 +269,7 @@
                     if (drawData.action === 'scene-update' && excalidrawEngine) {
                         isRemoteUpdate = true;
                         excalidrawEngine.updateScene({ elements: drawData.elements });
-                        setTimeout(() => isRemoteUpdate = false, 150);
+                        setTimeout(() => isRemoteUpdate = false, 50);
 
                         // Relay this drawing to everyone else in the Meet room!
                         // (Except the person/phone who just sent it to us)
