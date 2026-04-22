@@ -24,7 +24,7 @@
         const targetPeerId = urlParams.get('peerId');
 
         function MobileApp() {
-            const [excalidrawAPI, setExcalidrawAPI] = useState(null);
+            const excalidrawAPIRef = useRef(null); // ref instead of state — always current in callbacks
             const isRemoteUpdate = useRef(false);
             const connectionRef = useRef(null);
             const [isLibLoaded, setIsLibLoaded] = useState(false);
@@ -44,16 +44,18 @@
                     }
                 };
                 checkLib();
-            }, []); // Run once on mount
+            }, []);
 
-
+            // Wait for lib to be loaded before connecting peer,
+            // so excalidrawAPIRef.current is set before data arrives
             useEffect(() => {
+                if (!isLibLoaded) return;
                 if (targetPeerId) {
                     initPeer();
                 } else {
                     document.getElementById('status').innerText = "Error: No Peer ID found.";
                 }
-            }, []);
+            }, [isLibLoaded]);
 
             const initPeer = async () => {
                 let config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -75,9 +77,10 @@
 
                     conn.on('data', (data) => {
                         const msg = JSON.parse(data);
-                        if (msg.action === 'scene-update' && excalidrawAPI) {
+                        // Use ref so we always read the latest API instance, not a stale closure
+                        if (msg.action === 'scene-update' && excalidrawAPIRef.current) {
                             isRemoteUpdate.current = true;
-                            excalidrawAPI.updateScene({ elements: msg.elements });
+                            excalidrawAPIRef.current.updateScene({ elements: msg.elements });
                             setTimeout(() => isRemoteUpdate.current = false, 100);
                         }
                     });
@@ -98,7 +101,7 @@
                 "div", 
                 { id: "excalidraw-mobile-wrapper" },
                 React.createElement(lib.Excalidraw, {
-                    excalidrawAPI: (api) => setExcalidrawAPI(api),
+                    excalidrawAPI: (api) => { excalidrawAPIRef.current = api; }, // store in ref, not state
                     onChange: onBoardChange,
                     UIOptions: {
                         canvasActions: {
