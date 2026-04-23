@@ -210,34 +210,42 @@
         async function init() {
             console.log("[Main Stage] Initializing Google Meet Add-on SDK...");
             try {
-                // Keep the Meet SDK initialized so the iframe doesn't crash
-                const session = await window.meet.addon.createAddonSession({
-                    cloudProjectNumber: "547958960288" // Your specific project number
-                });
-                mainStageClient = await session.createMainStageClient();
+                // ✅ CORRECT INITIALIZATION: Use the direct SDK method
+                // This replaces the "createAddonSession" logic
+                mainStageClient = await google.meet.addons.createMainStageClient();
+                
                 console.log("Meet SDK Initialized successfully.");
 
                 // If a board was started before the SDK was ready, send the ID now
                 if (pendingPeerId) {
                     console.log("[Main Stage] Sending queued Peer ID to Side Panel:", pendingPeerId);
-                    mainStageClient.sendMessageToSidePanel({ action: 'show-qr', peerId: pendingPeerId });
+                    
+                    // ✅ USE AWAIT: Sending messages is asynchronous
+                    await mainStageClient.sendMessageToSidePanel({ 
+                        action: 'show-qr', 
+                        peerId: pendingPeerId 
+                    });
                     pendingPeerId = null;
                 }
 
-                // Listen for requests from the Side Panel (in case it loaded late)
-                mainStageClient.on('message', (msg) => {
+                // Listen for messages from the Side Panel
+                mainStageClient.on('message', async (msg) => {
                     console.log("[Main Stage] Received message from side panel:", msg);
+                    
                     if (msg.action === 'request-qr' && currentTargetPeerId) {
                         console.log("[Main Stage] Re-sending QR code state to side panel...");
-                        mainStageClient.sendMessageToSidePanel({ action: 'show-qr', peerId: currentTargetPeerId });
+                        
+                        await mainStageClient.sendMessageToSidePanel({ 
+                            action: 'show-qr', 
+                            peerId: currentTargetPeerId 
+                        });
                     }
                 });
+
             } catch (error) {
-                console.error("SDK Error:", error);
+                console.error("SDK Error during initialization:", error);
             }
         }
-
-        // --- 3. LOBBY LOGIC (HOST VS JOIN) ---
         
         // Action: Create New Board
         document.getElementById('host-btn').onclick = async () => {

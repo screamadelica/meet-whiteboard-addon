@@ -28,21 +28,25 @@
 
         async function init() {
             try {
-                const session = await window.meet.addon.createAddonSession({
-                    cloudProjectNumber: "547958960288"
-                });
-                sidePanelClient = await session.createSidePanelClient();
+                // 1. Correct Initialization
+                // We call the SDK directly. No 'session' object is needed here.
+                sidePanelClient = await google.meet.addons.createSidePanelClient();
                 console.log("[Side Panel] Meet SDK Initialized.");
 
-                // Handle Launch button click
+                // 2. Handle Launch button click
                 document.getElementById('launch-btn').onclick = async () => {
                     console.log("Launching Main Stage");
-                    await sidePanelClient.startActivity({
-                        mainStageUrl: window.location.origin + '/main-stage.html'
-                    });                    
+                    try {
+                        // Use exposeToMainStage to move the whiteboard to the center
+                        await sidePanelClient.exposeToMainStage({
+                            url: window.location.origin + '/main-stage.html'
+                        }); 
+                    } catch (exposeError) {
+                        console.error("Failed to expose to Main Stage:", exposeError);
+                    }                   
                 };
 
-                // Listen for messages from the Main Stage
+                // 3. Listen for messages from the Main Stage
                 sidePanelClient.on('message', (msg) => {
                     console.log("[Side Panel] Received message from main stage:", msg);
                     if (msg.action === 'show-qr') {
@@ -50,9 +54,10 @@
                     }
                 });
 
-                // Ping the main stage to see if a board is already active
+                // 4. Ping the main stage
+                // Awaiting the message ensures the SDK bridge is ready
                 console.log("[Side Panel] Requesting current board state from main stage...");
-                sidePanelClient.sendMessageToMainStage({ action: 'request-qr' });
+                await sidePanelClient.sendMessageToMainStage({ action: 'request-qr' });
 
             } catch (err) {
                 console.error("Side Panel Init Error:", err);
