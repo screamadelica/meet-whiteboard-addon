@@ -44,14 +44,7 @@
             <p id="status-text">Waiting for peers...</p>
         </div>
 
-        <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 10px;">
-            <div style="text-align: center; background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold;">Draw from Phone!</p>
-                <img id="qr-code" src="" alt="Waiting for ID..." style="width: 120px; height: 120px; display: none;">
-            </div>
-            
-            <div id="excalidraw-wrapper"></div>
-        </div>
+        <div id="excalidraw-wrapper" style="margin: 0 auto;"></div>
 
         <div class="controls">
             <button id="clear-btn" style="background: #ea4335;">Clear Board</button>
@@ -211,6 +204,7 @@
         }
 
         // --- 2. GOOGLE MEET SDK INITIALIZATION ---
+        let mainStageClient = null;
         async function init() {
             console.log("[Main Stage] Initializing Google Meet Add-on SDK...");
             try {
@@ -218,7 +212,7 @@
                 const session = await window.meet.addon.createAddonSession({
                     cloudProjectNumber: "547958960288" // Your specific project number
                 });
-                await session.createMainStageClient();
+                mainStageClient = await session.createMainStageClient();
                 console.log("Meet SDK Initialized successfully.");
             } catch (error) {
                 console.error("SDK Error:", error);
@@ -278,11 +272,10 @@
             const root = ReactDOM.createRoot(document.getElementById('excalidraw-wrapper'));
             root.render(React.createElement(MainApp, { pin: pin }));
 
-            // Generate QR Code for Mobile App
-            const mobileUrl = `${window.location.origin}/mobile.html?peerId=${targetPeerId}`;
-            const qrImg = document.getElementById('qr-code');
-            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(mobileUrl)}`;
-            qrImg.style.display = "block";
+            // Notify Side Panel to show QR Code
+            if (mainStageClient) {
+                mainStageClient.sendSidePanelMessage({ action: 'show-qr', peerId: targetPeerId });
+            }
         }
 
         // --- 4. CONNECTION & RELAY LOGIC ---

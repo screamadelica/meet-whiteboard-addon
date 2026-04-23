@@ -9,7 +9,12 @@
 
     <style>
         body { margin: 0; padding: 0; background: #f0f2f5; overflow: hidden; height: 100vh; font-family: sans-serif; }
-        #status { position: absolute; top: 10px; left: 10px; font-weight: bold; color: #fbbc04; z-index: 100; pointer-events: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+        #status { 
+            position: absolute; top: 10px; left: 10px; 
+            font-weight: bold; color: #fbbc04; z-index: 100; 
+            pointer-events: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            background: rgba(255,255,255,0.7); padding: 4px 8px; border-radius: 4px;
+        }
         #excalidraw-mobile-wrapper { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; }
     </style>
 </head>
@@ -19,6 +24,12 @@
 </body>
 
     <script type="text/javascript">
+        // Ensure global React exists if bundled inside Excalidraw
+        if (!window.React && window.ExcalidrawLib?.React) {
+            window.React = window.ExcalidrawLib.React;
+            window.ReactDOM = window.ExcalidrawLib.ReactDOM;
+        }
+
         const { useState, useEffect, useRef } = React;
         const urlParams = new URLSearchParams(window.location.search);
         const targetPeerId = urlParams.get('peerId');
@@ -153,7 +164,9 @@
                             saveToActiveFile: false,
                             changeViewBackgroundColor: false
                         },
-                        zoomControls: false
+                        zoomControls: false,
+                        // Disable the welcome screen for a cleaner mobile controller experience
+                        welcomeScreen: false
                     }
                 })
             );
@@ -161,14 +174,15 @@
 
         // Ensure library is available before mounting React
         const initMobile = () => {
-            if (window.React && window.ReactDOM && document.getElementById('excalidraw-mobile-wrapper')) {
+            const lib = window.ExcalidrawLib || window.Excalidraw;
+            if (window.React && window.ReactDOM && lib) {
                 const root = ReactDOM.createRoot(document.getElementById('excalidraw-mobile-wrapper'));
                 root.render(React.createElement(MobileApp));
             } else {
-                setTimeout(initMobile, 100);
+                setTimeout(initMobile, 50);
             }
         };
-
-        initMobile();
+        
+        window.addEventListener('load', initMobile);
     </script>
 </html>

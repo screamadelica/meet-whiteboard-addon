@@ -1,38 +1,56 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <title>Whiteboard Controller</title>
     <script src="https://www.gstatic.com/meetjs/addons/1.1.0/meet.addons.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f8f9fa; display: flex; flex-direction: column; align-items: center; text-align: center; }
+        .qr-container { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-top: 20px; display: none; }
+        #qr-code { width: 200px; height: 200px; }
+        .info { color: #5f6368; font-size: 0.9em; margin-bottom: 20px; }
+    </style>
 </head>
-<body style="font-family: sans-serif; padding: 10px;">
-    <h3>Hello World Add-on</h3>
-    <button id="launch-btn">Launch Main Stage</button>
+<body>
+    <h3>Whiteboard Companion</h3>
+    <p class="info">Start or join a board on the main stage to see the mobile link.</p>
+
+    <div id="qr-section" class="qr-container">
+        <p style="font-weight: bold; margin-top: 0;">Draw from your phone!</p>
+        <img id="qr-code" src="" alt="QR Code">
+        <p style="font-size: 0.8em; color: #70757a; margin-bottom: 0;">Scan to open the mobile controller</p>
+    </div>
 
     <script>
+        let sidePanelClient = null;
+
         async function init() {
             try {
-                console.log("1. Starting stable SDK...");
-                
-                // 2. Note the singular "addon" and the required cloudProjectNumber
                 const session = await window.meet.addon.createAddonSession({
-                    cloudProjectNumber: "547958960288" // A dummy number works fine for local bypass testing
+                    cloudProjectNumber: "547958960288"
                 });
-                console.log("2. Session created!");
-                
-                // 3. New method name for the client
-                const sidePanelClient = await session.createSidePanelClient();
-                
-                document.getElementById('launch-btn').onclick = async () => {
-                    console.log("3. Launching Main Stage!");
-                    await sidePanelClient.startActivity({
-                        // 4. Note it is mainStageUrl now, not mainStageUri
-                        mainStageUrl: window.location.origin + '/main-stage.html'
-                    });
-                };
-            } catch (error) {
-                console.error("SDK Initialization FAILED:", error);
+                sidePanelClient = await session.createSidePanelClient();
+
+                // Listen for messages from the Main Stage
+                sidePanelClient.onSidePanelMessage((msg) => {
+                    if (msg.action === 'show-qr') {
+                        showQrCode(msg.peerId);
+                    }
+                });
+            } catch (err) {
+                console.error("Side Panel Init Error:", err);
             }
         }
-        
+
+        function showQrCode(peerId) {
+            const mobileUrl = `${window.location.origin}/mobile.html?peerId=${peerId}`;
+            const qrImg = document.getElementById('qr-code');
+            const qrSection = document.getElementById('qr-section');
+            
+            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(mobileUrl)}`;
+            qrSection.style.display = 'block';
+            document.querySelector('.info').innerText = "Mobile controller linked to board: " + peerId.split('-').pop();
+        }
+
         init();
     </script>
 </body>
