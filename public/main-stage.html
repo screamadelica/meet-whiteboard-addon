@@ -77,6 +77,7 @@
         let activeConnections = []; 
         let excalidrawEngine = null;
         let isRemoteUpdate = false;
+        let currentTargetPeerId = null;
         let pendingPeerId = null;
         let lastSentVersionMap = new Map();
         const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
@@ -218,9 +219,19 @@
 
                 // If a board was started before the SDK was ready, send the ID now
                 if (pendingPeerId) {
+                    console.log("[Main Stage] Sending queued Peer ID to Side Panel:", pendingPeerId);
                     mainStageClient.sendSidePanelMessage({ action: 'show-qr', peerId: pendingPeerId });
                     pendingPeerId = null;
                 }
+
+                // Listen for requests from the Side Panel (in case it loaded late)
+                mainStageClient.onMainStageMessage((msg) => {
+                    console.log("[Main Stage] Received message from side panel:", msg);
+                    if (msg.action === 'request-qr' && currentTargetPeerId) {
+                        console.log("[Main Stage] Re-sending QR code state to side panel...");
+                        mainStageClient.sendSidePanelMessage({ action: 'show-qr', peerId: currentTargetPeerId });
+                    }
+                });
             } catch (error) {
                 console.error("SDK Error:", error);
             }
@@ -270,6 +281,8 @@
         // UI Transition to Canvas
         function enterCanvasScreen(pin, targetPeerId) {
             console.log("[Main Stage] Transitioning UI to Canvas Screen.");
+            currentTargetPeerId = targetPeerId; // Store for side panel requests
+
             document.getElementById('lobby-screen').style.display = 'none';
             document.getElementById('canvas-screen').style.display = 'block';
             document.getElementById('display-pin').innerText = pin;
@@ -281,8 +294,10 @@
 
             // Notify Side Panel to show QR Code
             if (mainStageClient) {
+                console.log("[Main Stage] Sending 'show-qr' message with ID:", targetPeerId);
                 mainStageClient.sendSidePanelMessage({ action: 'show-qr', peerId: targetPeerId });
             } else {
+                console.warn("[Main Stage] SDK client not ready. Queueing Peer ID.");
                 pendingPeerId = targetPeerId;
             }
         }

@@ -32,6 +32,7 @@
                     cloudProjectNumber: "547958960288"
                 });
                 sidePanelClient = await session.createSidePanelClient();
+                console.log("[Side Panel] Meet SDK Initialized.");
 
                 // Handle Launch button click
                 document.getElementById('launch-btn').onclick = async () => {
@@ -39,21 +40,27 @@
                     await sidePanelClient.startActivity({
                         mainStageUrl: window.location.origin + '/main-stage.html'
                     });                    
-//                    sidePanelClient.promoteToMainStage();
                 };
 
                 // Listen for messages from the Main Stage
                 sidePanelClient.onSidePanelMessage((msg) => {
+                    console.log("[Side Panel] Received message from main stage:", msg);
                     if (msg.action === 'show-qr') {
                         showQrCode(msg.peerId);
                     }
                 });
+
+                // Ping the main stage to see if a board is already active
+                console.log("[Side Panel] Requesting current board state from main stage...");
+                sidePanelClient.sendMainStageMessage({ action: 'request-qr' });
+
             } catch (err) {
                 console.error("Side Panel Init Error:", err);
             }
         }
 
         function showQrCode(peerId) {
+            console.log("[Side Panel] Displaying QR for:", peerId);
             const mobileUrl = `${window.location.origin}/mobile.html?peerId=${peerId}`;
             const qrImg = document.getElementById('qr-code');
             const qrSection = document.getElementById('qr-section');
