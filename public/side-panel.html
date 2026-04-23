@@ -43,7 +43,7 @@
                 };
 
                 // Listen for messages from the Main Stage
-                sidePanelClient.onSidePanelMessage((msg) => {
+                sidePanelClient.on('message', (msg) => {
                     console.log("[Side Panel] Received message from main stage:", msg);
                     if (msg.action === 'show-qr') {
                         showQrCode(msg.peerId);
@@ -52,7 +52,7 @@
 
                 // Ping the main stage to see if a board is already active
                 console.log("[Side Panel] Requesting current board state from main stage...");
-                sidePanelClient.sendMainStageMessage({ action: 'request-qr' });
+                sidePanelClient.sendMessageToMainStage({ action: 'request-qr' });
 
             } catch (err) {
                 console.error("Side Panel Init Error:", err);
