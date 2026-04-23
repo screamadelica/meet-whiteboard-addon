@@ -77,6 +77,7 @@
         let activeConnections = []; 
         let excalidrawEngine = null;
         let isRemoteUpdate = false;
+        let pendingPeerId = null;
         let lastSentVersionMap = new Map();
         const prefix = "meetboard-xyz-"; // Prevents ID collision on the public PeerJS server
         
@@ -214,6 +215,12 @@
                 });
                 mainStageClient = await session.createMainStageClient();
                 console.log("Meet SDK Initialized successfully.");
+
+                // If a board was started before the SDK was ready, send the ID now
+                if (pendingPeerId) {
+                    mainStageClient.sendSidePanelMessage({ action: 'show-qr', peerId: pendingPeerId });
+                    pendingPeerId = null;
+                }
             } catch (error) {
                 console.error("SDK Error:", error);
             }
@@ -275,6 +282,8 @@
             // Notify Side Panel to show QR Code
             if (mainStageClient) {
                 mainStageClient.sendSidePanelMessage({ action: 'show-qr', peerId: targetPeerId });
+            } else {
+                pendingPeerId = targetPeerId;
             }
         }
 

@@ -31,7 +31,7 @@
                 const session = await window.meet.addon.createAddonSession({
                     cloudProjectNumber: "547958960288"
                 });
-                const sidePanelClient = await session.createSidePanelClient();
+                sidePanelClient = await session.createSidePanelClient();
 
                 // Handle Launch button click
                 document.getElementById('launch-btn').onclick = async () => {
