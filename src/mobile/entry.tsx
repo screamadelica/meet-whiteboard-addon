@@ -1,3 +1,4 @@
+import '../index.css';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Mobile from './Mobile'; // Your actual UI component

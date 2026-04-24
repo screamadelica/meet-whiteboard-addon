@@ -1,10 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
 
 export default defineConfig({
-  plugins: [react()],
-  // Add this to handle global 'process' errors if they appear in the browser
+  plugins: [
+    react(),
+    tailwindcss()
+  ],
   define: {
     "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV),
   },

@@ -92,30 +92,34 @@ const MobileController = () => {
   }, 50);
 
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'fixed', top: 0, left: 0 }}>
-      <div style={{ 
-          position: 'absolute', top: '10px', left: '10px', 
-          fontWeight: 'bold', color: statusColor, zIndex: 100, 
-          pointerEvents: 'none', textShadow: '1px 1px 2px rgba(0,0,0,0.5)',
-          background: 'rgba(255,255,255,0.7)', padding: '4px 8px', borderRadius: '4px'
-      }}>
+    <div className="fixed inset-0 h-screen w-screen overflow-hidden bg-gray-100">
+      {/* Status Indicator */}
+      <div 
+        className="absolute left-3 top-3 z-50 rounded-md bg-white/80 px-3 py-1 text-sm font-bold shadow-sm backdrop-blur-sm pointer-events-none"
+        style={{ color: statusColor }} // Keep dynamic color here
+      >
         {status}
       </div>
-      <Excalidraw 
-        excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
-        onChange={onBoardChange}
-        UIOptions={{
-          canvasActions: {
-            toggleTheme: false,
-            export: false,
-            loadScene: false,
-            saveToActiveFile: false,
-            changeViewBackgroundColor: false
-          },
-          zoomControls: false,
-          welcomeScreen: false
-        }}
-      />
+
+      {/* Excalidraw Wrapper */}
+      <div className="h-full w-full">
+        <Excalidraw 
+          excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
+          onChange={onBoardChange}
+          theme="light"
+          UIOptions={{
+            canvasActions: {
+              toggleTheme: false,
+              export: false,
+              loadScene: false,
+              saveToActiveFile: false,
+              changeViewBackgroundColor: false
+            },
+            zoomControls: false,
+            welcomeScreen: false
+          }}
+        />
+      </div>
     </div>
   );
 };

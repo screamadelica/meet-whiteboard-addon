@@ -85,13 +85,17 @@ const MainStage = () => {
   // --- Render ---
   if (isLobby) {
     return (
-      <div className="lobby-container">
-        <div className="card">
-          <h2>Collaborative Whiteboard</h2>
-          <button onClick={handleCreateBoard}>Create New Board</button>
-          {/* Add Join logic here similarly */}
+      <div className="flex h-screen flex-col items-center justify-center bg-gray-100 text-gray-900">
+        <div className="w-full max-w-md rounded-lg bg-white p-8 text-center shadow-lg">
+          <h2 className="mb-6 text-2xl font-bold">Collaborative Whiteboard</h2>
+          <button 
+            onClick={handleCreateBoard}
+            className="rounded bg-blue-600 px-6 py-2 text-white transition-colors hover:bg-blue-700 active:bg-blue-800"
+          >
+            Create New Board
+          </button>
         </div>
-      </div>
+      </div>  
     );
   }
 
