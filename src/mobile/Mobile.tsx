@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Excalidraw } from "@excalidraw/excalidraw";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
 import throttle from 'lodash.throttle'; // npm install lodash.throttle
 
@@ -9,7 +10,7 @@ const MobileController = () => {
   
   const excalidrawAPI = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
-  const versionMap = useRef(new Map());
+  const versionMap = useRef(new Map<string, number>());
   const connectionRef = useRef<DataConnection | null>(null);
 
   // Get the peerId from the URL just like your original script
@@ -53,8 +54,8 @@ const MobileController = () => {
             let nextElements;
 
             if (msg.isDiff) {
-              const map = new Map(currentElements.map((e: any) => [e.id, e]));
-              msg.elements.forEach((remoteEl: any) => {
+              const map = new Map<string, ExcalidrawElement>(currentElements.map((e: ExcalidrawElement) => [e.id, e]));
+              msg.elements.forEach((remoteEl: ExcalidrawElement) => {
                 const localEl = map.get(remoteEl.id);
                 if (!localEl || remoteEl.version > localEl.version) {
                   map.set(remoteEl.id, remoteEl);
@@ -67,7 +68,7 @@ const MobileController = () => {
 
             isRemoteUpdate.current = true;
             excalidrawAPI.current.updateScene({ elements: nextElements });
-            nextElements.forEach((el: any) => versionMap.current.set(el.id, el.version));
+            nextElements.forEach((el: ExcalidrawElement) => versionMap.current.set(el.id, el.version));
             setTimeout(() => { isRemoteUpdate.current = false; }, 50);
           }
         });
@@ -77,13 +78,13 @@ const MobileController = () => {
     initPeer();
   }, [targetPeerId]);
 
-  const onBoardChange = throttle((elements: any) => {
+  const onBoardChange = throttle((elements: readonly ExcalidrawElement[]) => {
     if (isRemoteUpdate.current || !connectionRef.current?.open) return;
 
-    const updates = elements.filter((el: any) => el.version > (versionMap.current.get(el.id) || -1));
+    const updates = elements.filter((el) => el.version > (versionMap.current.get(el.id) || -1));
     if (updates.length === 0) return;
 
-    updates.forEach((el: any) => versionMap.current.set(el.id, el.version));
+    updates.forEach((el) => versionMap.current.set(el.id, el.version));
     connectionRef.current.send(JSON.stringify({ 
       action: 'scene-update', 
       elements: updates, 
@@ -115,7 +116,6 @@ const MobileController = () => {
               saveToActiveFile: false,
               changeViewBackgroundColor: false
             },
-            zoomControls: false,
             welcomeScreen: false
           }}
         />

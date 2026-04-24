@@ -19,6 +19,9 @@ const MainStage = () => {
   const isRemoteUpdate = useRef(false);
   const lastSentVersionMap = useRef(new Map());
 
+  const mobileUrl = `${window.location.origin}/mobile.html?peerId=${PREFIX + pin}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(mobileUrl)}`;
+  
   // --- 1. Init Meet SDK ---
   useEffect(() => {
     const initMeet = async () => {
@@ -99,16 +102,36 @@ const MainStage = () => {
   }
 
   return (
-    <div className="canvas-screen">
-      <div className="header">
-        <h2>Room PIN: <span style={{color: '#0F9D58'}}>{pin}</span></h2>
-        <p>{status}</p>
+  <div className="flex h-screen flex-col bg-gray-50 overflow-hidden">
+      {/* Header with Room Info */}
+      <div className="flex items-center justify-between bg-white p-4 shadow-sm border-b border-gray-200">
+        <div className="flex items-center gap-6">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">Room PIN</h2>
+            <p className="text-2xl font-black text-blue-600">{pin}</p>
+          </div>
+          
+          {/* QR Code Section */}
+          <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200 shadow-inner">
+            <img 
+              src={qrCodeUrl} 
+              alt="Scan to join" 
+              className="h-16 w-16 rounded border border-white shadow-sm bg-white"
+            />
+            <div>
+              <p className="text-xs font-bold text-gray-700">Draw from Phone!</p>
+              <p className="text-[10px] text-gray-400">Scan to collaborate</p>
+            </div>
+          </div>
+        </div>
       </div>
-      
-      <div style={{ height: '500px', width: '800px', border: '1px solid #ccc' }}>
+
+      {/* Excalidraw Canvas Area */}
+      <div className="relative flex-1 bg-white">
         <Excalidraw 
           excalidrawAPI={(api) => (excalidrawAPI.current = api)}
           onChange={throttledBroadcast}
+          theme="light"
         />
       </div>
     </div>
