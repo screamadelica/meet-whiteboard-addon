@@ -27,8 +27,10 @@ const MainStage = () => {
           cloudProjectNumber: "547958960288"
         });
         await session.createMainStageClient();
+
+        console.log("Main Stage Handshake Complete");
       } catch (e) {
-        console.error("Meet SDK Error:", e);
+        console.error("Meet SDK Handshake Failed:", e);
       }
     };
     initMeet();

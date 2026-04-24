@@ -25,7 +25,7 @@ const SidePanel = () => {
   const handleLaunch = async () => {
     if (client) {
       await client.startActivity({
-        mainStageUrl: `${window.location.origin}/main-stage`
+        mainStageUrl: `${window.location.origin}/main-stage.html`
       });
     }
   };
