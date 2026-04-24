@@ -1,27 +1,27 @@
 {
   "name": "meet-addon-whiteboard",
+  "private": true,
   "version": "1.0.0",
-  "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "vite build"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "@excalidraw/excalidraw": "^0.17.6",
-    "@neondatabase/serverless": "^1.0.2",
-    "@tldraw/tldraw": "^4.4.0",
-    "lodash.throttle": "^4.1.1",
-    "peerjs": "^1.5.2",
+    "@googleworkspace/meet-addons": "^1.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "turnix-js": "^0.1.4",
-    "yjs": "^13.6.29"
+    "peerjs": "^1.5.4",
+    "lodash.throttle": "^4.1.1"
   },
   "devDependencies": {
-    "vite": "^5.4.0"
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.2.2",
+    "vite": "^5.3.1"
   }
 }
+
