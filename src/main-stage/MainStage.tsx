@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import './MainStage.css';
 import { meet } from '@googleworkspace/meet-addons';
 import { Excalidraw } from "@excalidraw/excalidraw";
 import Peer, { DataConnection } from 'peerjs';

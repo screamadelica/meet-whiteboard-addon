@@ -1,0 +1,32 @@
+/* MainStage.css */
+.lobby-container { 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    height: 100vh; 
+    background-color: #f8f9fa; /* Explicitly set a light background */
+    color: #202124;
+}
+
+.card { 
+    background: white; 
+    padding: 30px; 
+    border-radius: 8px; 
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+    text-align: center; 
+}
+
+.card button { 
+    padding: 10px 20px; 
+    font-size: 16px; 
+    border-radius: 4px; 
+    background-color: #1a73e8; 
+    color: white; 
+    border: none; 
+    cursor: pointer; 
+}
+
+.card button:hover {
+    background-color: #1557b0;
+}
