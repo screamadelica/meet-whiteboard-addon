@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
@@ -19,7 +19,7 @@ const MobileController = () => {
 
   useEffect(() => {
     if (!targetPeerId) {
-      setStatus("Error: No Peer ID found.");
+      setStatus("No Board Linked");
       return;
     }
 
@@ -38,18 +38,25 @@ const MobileController = () => {
       const peer = new Peer({ config });
       
       peer.on('open', () => {
-        setStatus("Linking...");
+        setStatus("Connecting...");
         const conn = peer.connect(targetPeerId);
         connectionRef.current = conn;
 
         conn.on('open', () => {
-          setStatus("Connected!");
+          setStatus("Connected");
           setStatusColor("#34a853");
         });
 
         conn.on('data', (data: any) => {
           const msg = JSON.parse(data);
           if (msg.action === 'scene-update' && excalidrawAPI.current) {
+            // CRITICAL: If the user is currently drawing or interacting, 
+            // skip remote updates to prevent the "disappearing stroke" / "dot" bug.
+            const appState = excalidrawAPI.current.getAppState();
+            if (appState.draggingElement || appState.resizingElement || appState.editingElement) {
+              return; 
+            }
+
             const currentElements = excalidrawAPI.current.getSceneElements();
             let nextElements;
 
@@ -78,19 +85,24 @@ const MobileController = () => {
     initPeer();
   }, [targetPeerId]);
 
-  const onBoardChange = throttle((elements: readonly ExcalidrawElement[]) => {
-    if (isRemoteUpdate.current || !connectionRef.current?.open) return;
+  // Use useMemo to ensure the throttled function is stable across re-renders
+  const onBoardChange = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
+    if (isRemoteUpdate.current || !connectionRef.current || !connectionRef.current.open) return;
 
-    const updates = elements.filter((el) => el.version > (versionMap.current.get(el.id) || -1));
-    if (updates.length === 0) return;
-
-    updates.forEach((el) => versionMap.current.set(el.id, el.version));
-    connectionRef.current.send(JSON.stringify({ 
-      action: 'scene-update', 
-      elements: updates, 
-      isDiff: true 
-    }));
-  }, 50);
+    const updates = elements.filter((el) => {
+        const lastVersion = versionMap.current.get(el.id) || -1;
+        return el.version > lastVersion;
+    });
+    
+    if (updates.length > 0) {
+        updates.forEach((el) => versionMap.current.set(el.id, el.version));
+        connectionRef.current.send(JSON.stringify({ 
+            action: 'scene-update', 
+            elements: updates, 
+            isDiff: true 
+        }));
+    }
+  }, 50), []);
 
   return (
     <div className="fixed inset-0 h-screen w-screen overflow-hidden bg-gray-100">
@@ -99,7 +111,7 @@ const MobileController = () => {
         className="absolute left-3 top-3 z-50 rounded-md bg-white/80 px-3 py-1 text-sm font-bold shadow-sm backdrop-blur-sm pointer-events-none"
         style={{ color: statusColor }} // Keep dynamic color here
       >
-        {status}
+        ● {status}
       </div>
 
       {/* Excalidraw Wrapper */}
