@@ -14,6 +14,7 @@ const MainStage = () => {
   
   const excalidrawAPI = useRef<any>(null);
   const peerInstance = useRef<Peer | null>(null);
+  const mainStageClient = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
   const lastSentVersionMap = useRef(new Map<string, number>());
 
@@ -22,7 +23,7 @@ const MainStage = () => {
     const initMeet = async () => {
       try {
         const session = await meet.addon.createAddonSession({ cloudProjectNumber: "547958960288" });
-        await session.createMainStageClient();
+        mainStageClient.current = await session.createMainStageClient();
       } catch (e) {
         console.error("Meet SDK Handshake Failed:", e);
       }
@@ -119,9 +120,16 @@ const MainStage = () => {
     });
   };
 
-  const handleCreateBoard = () => {
+  const handleCreateBoard = async () => {
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     setPin(newPin);
+    if (mainStageClient.current) {
+      await mainStageClient.current.sendFrameToFrameMessage({
+        type: 'PIN_UPDATE',
+        pin: newPin,
+      });
+    }
+
     const peer = new Peer(PREFIX + newPin);
     peerInstance.current = peer;
     peer.on('open', () => setIsLobby(false));

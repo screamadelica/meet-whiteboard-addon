@@ -3,6 +3,7 @@ import { meet } from '@googleworkspace/meet-addons';
 
 const SidePanel = () => {
   const [client, setClient] = useState<any>(null);
+  const [pin, setPin] = useState<string | null>(null);
 
   useEffect(() => {
     const initMeet = async () => {
@@ -14,6 +15,13 @@ const SidePanel = () => {
         
         const sidePanelClient = await session.createSidePanelClient();
         setClient(sidePanelClient);
+
+        // Listen for messages (like PIN updates) from the Main Stage
+        sidePanelClient.on('frameToFrameMessage', (event: any) => {
+          if (event.payload && event.payload.type === 'PIN_UPDATE') {
+            setPin(event.payload.pin);
+          }
+        });
       } catch (error) {
         console.error("SDK Initialization FAILED:", error);
       }
@@ -36,6 +44,14 @@ const SidePanel = () => {
       <p className="text-sm leading-5 mb-2">
         Collaborate with your team by launching the whiteboard on the main stage.
       </p>
+
+      {pin && (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center my-2">
+          <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Session PIN</span>
+          <span className="text-2xl font-mono font-bold text-[#1a73e8] tracking-[0.2em]">{pin}</span>
+        </div>
+      )}
+
       <button
         onClick={handleLaunch}
         disabled={!client}
