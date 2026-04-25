@@ -52,8 +52,8 @@ const MobileController = () => {
           if (msg.action === 'scene-update' && excalidrawAPI.current) {
             // CRITICAL: If the user is currently drawing or interacting, 
             // skip remote updates to prevent the "disappearing stroke" / "dot" bug.
-            const appState = excalidrawAPI.current.getAppState();
-            if (appState.draggingElement || appState.resizingElement || appState.editingElement) {
+            const currentAppState = excalidrawAPI.current.getAppState();
+            if (currentAppState.draggingElement || currentAppState.resizingElement || currentAppState.editingElement) {
               return; 
             }
 
@@ -74,9 +74,15 @@ const MobileController = () => {
             }
 
             isRemoteUpdate.current = true;
-            excalidrawAPI.current.updateScene({ elements: nextElements });
+            excalidrawAPI.current.updateScene({ 
+              elements: nextElements,
+              appState: currentAppState, // Maintain local zoom/scroll/tool
+              commitToHistory: false      // Don't add remote strokes to local undo history
+            });
             nextElements.forEach((el: ExcalidrawElement) => versionMap.current.set(el.id, el.version));
-            setTimeout(() => { isRemoteUpdate.current = false; }, 50);
+            
+            // Use 150ms to ensure Excalidraw's internal onChange fires while flag is still true
+            setTimeout(() => { isRemoteUpdate.current = false; }, 150);
           }
         });
       });
