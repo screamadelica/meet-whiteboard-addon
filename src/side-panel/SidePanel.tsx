@@ -31,16 +31,21 @@ const SidePanel = () => {
   };
 
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: '10px' }}>
-      <h3>Hello World Add-on</h3>
-      <button 
-        onClick={handleLaunch} 
+    <div className="p-6 flex flex-col gap-3 text-[#3c4043] font-sans">
+      <h2 className="text-[18px] font-medium m-0">Whiteboard Add-on</h2>
+      <p className="text-sm leading-5 mb-2">
+        Collaborate with your team by launching the whiteboard on the main stage.
+      </p>
+      <button
+        onClick={handleLaunch}
         disabled={!client}
+        className={`rounded text-white text-sm font-medium py-[10px] px-6 w-fit transition-colors ${
+          client ? 'bg-[#1a73e8] hover:bg-[#1557b0] cursor-pointer' : 'bg-[#dadce0] cursor-not-allowed'
+        }`}
       >
         {client ? "Launch Main Stage" : "Initializing..."}
       </button>
     </div>
   );
 };
-
 export default SidePanel;
