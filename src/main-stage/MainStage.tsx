@@ -124,12 +124,8 @@ const MainStage = () => {
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     setPin(newPin);
     if (mainStageClient.current) {
-      await mainStageClient.current.notifySidePanel({
-        type: 'PIN_UPDATE',
-        pin: newPin,
-      });
+      await mainStageClient.current.notifySidePanel("Hello from the MainStage!")
     }
-
     const peer = new Peer(PREFIX + newPin);
     peerInstance.current = peer;
     peer.on('open', () => setIsLobby(false));

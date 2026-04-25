@@ -16,12 +16,10 @@ const SidePanel = () => {
         const sidePanelClient = await session.createSidePanelClient();
         setClient(sidePanelClient);
 
-        // Listen for messages (like PIN updates) from the Main Stage
-        sidePanelClient.on('frameToFrameMessage', (event: any) => {
-          if (event.payload && event.payload.type === 'PIN_UPDATE') {
-            setPin(event.payload.pin);
-          }
+        sidePanelClient.on('frameToFrameMessage', (arg) => {
+          console.log("Message received:", arg.payload);
         });
+
       } catch (error) {
         console.error("SDK Initialization FAILED:", error);
       }
