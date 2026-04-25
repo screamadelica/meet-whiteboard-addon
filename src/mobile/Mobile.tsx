@@ -34,20 +34,16 @@ const MobileController = () => {
           let nextElements;
 
           if (msg.isDiff) {
-            const map = new Map<string, ExcalidrawElement>(
-              currentElements.map((e: ExcalidrawElement) => [e.id, e])
-            );
-                        
-            (msg.elements as ExcalidrawElement[]).forEach((remoteEl) => {
+            const map = new Map(currentElements.map((e: any) => [e.id, e]));
+            
+            msg.elements.forEach((remoteEl: any) => {
               const localEl = map.get(remoteEl.id);
-  
               if (!localEl || remoteEl.version > localEl.version) {
                 map.set(remoteEl.id, remoteEl);
               }
             });
             
             const nextElements = Array.from(map.values());
-          
           } else {
             nextElements = msg.elements;
           }

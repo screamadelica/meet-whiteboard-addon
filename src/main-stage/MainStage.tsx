@@ -74,19 +74,14 @@ const MainStage = () => {
           let nextElements;
 
           if (drawData.isDiff) {
-            const map = new Map<string, ExcalidrawElement>(
-              currentElements.map((e: ExcalidrawElement) => [e.id, e])
-            );
-
-            (drawData.elements as ExcalidrawElement[]).forEach((remoteEl) => {
+            const map = new Map(currentElements.map((e: any) => [e.id, e]));
+            drawData.elements.forEach((remoteEl: any) => {
               const localEl = map.get(remoteEl.id);
-              
               if (!localEl || remoteEl.version > localEl.version) {
                 map.set(remoteEl.id, remoteEl);
               }
             });
-
-            const nextElements = Array.from(map.values());    
+            nextElements = Array.from(map.values());
 
           } else {
             nextElements = drawData.elements;
