@@ -124,7 +124,7 @@ const MainStage = () => {
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     setPin(newPin);
     if (mainStageClient.current) {
-      await mainStageClient.current.sendFrameToFrameMessage({
+      await mainStageClient.current.sendSidePanelMessage({
         type: 'PIN_UPDATE',
         pin: newPin,
       });
