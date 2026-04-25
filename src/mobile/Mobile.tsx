@@ -2,142 +2,93 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
-import throttle from 'lodash.throttle'; // npm install lodash.throttle
+import throttle from 'lodash.throttle';
 
 const MobileController = () => {
-  const [status, setStatus] = useState("Connecting to Meet...");
-  const [statusColor, setStatusColor] = useState("#fbbc04");
-  
+  const [status, setStatus] = useState("Connecting...");
   const excalidrawAPI = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
   const versionMap = useRef(new Map<string, number>());
   const connectionRef = useRef<DataConnection | null>(null);
 
-  // Get the peerId from the URL just like your original script
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
 
   useEffect(() => {
-    if (!targetPeerId) {
-      setStatus("No Board Linked");
-      return;
-    }
+    if (!targetPeerId) return;
 
-    const initPeer = async () => {
-      let config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-      try {
-        const res = await fetch('/api/get-ice-servers');
-        if (res.ok) {
-          const data = await res.json();
-          config = data.config;
-        }
-      } catch (e) {
-        console.error("Failed to fetch ICE servers, using default.");
-      }
+    const peer = new Peer();
+    peer.on('open', () => {
+      const conn = peer.connect(targetPeerId);
+      connectionRef.current = conn;
 
-      const peer = new Peer({ config });
-      
-      peer.on('open', () => {
-        setStatus("Connecting...");
-        const conn = peer.connect(targetPeerId);
-        connectionRef.current = conn;
+      conn.on('open', () => setStatus("Connected"));
+      conn.on('data', (data: any) => {
+        const msg = JSON.parse(data);
+        if (msg.action === 'scene-update' && excalidrawAPI.current) {
+          // Optimization: Don't interrupt user if they are drawing
+          const appState = excalidrawAPI.current.getAppState();
+          if (appState.draggingElement || appState.resizingElement || appState.editingElement) return;
 
-        conn.on('open', () => {
-          setStatus("Connected");
-          setStatusColor("#34a853");
-        });
+          const currentElements = excalidrawAPI.current.getSceneElements();
+          let nextElements;
 
-        conn.on('data', (data: any) => {
-          const msg = JSON.parse(data);
-          if (msg.action === 'scene-update' && excalidrawAPI.current) {
-            // CRITICAL: If the user is currently drawing or interacting, 
-            // skip remote updates to prevent the "disappearing stroke" / "dot" bug.
-            const currentAppState = excalidrawAPI.current.getAppState();
-            if (currentAppState.draggingElement || currentAppState.resizingElement || currentAppState.editingElement) {
-              return; 
-            }
-
-            const currentElements = excalidrawAPI.current.getSceneElements();
-            let nextElements;
-
-            if (msg.isDiff) {
-              const map = new Map<string, ExcalidrawElement>(currentElements.map((e: ExcalidrawElement) => [e.id, e]));
-              msg.elements.forEach((remoteEl: ExcalidrawElement) => {
-                const localEl = map.get(remoteEl.id);
-                if (!localEl || remoteEl.version > localEl.version) {
-                  map.set(remoteEl.id, remoteEl);
-                }
-              });
-              nextElements = Array.from(map.values());
-            } else {
-              nextElements = msg.elements;
-            }
-
-            isRemoteUpdate.current = true;
-            excalidrawAPI.current.updateScene({ 
-              elements: nextElements,
-              appState: currentAppState, // Maintain local zoom/scroll/tool
-              commitToHistory: false      // Don't add remote strokes to local undo history
+          if (msg.isDiff) {
+            const map = new Map(currentElements.map((e: any) => [e.id, e]));
+            msg.elements.forEach((remoteEl: any) => {
+              const localEl = map.get(remoteEl.id);
+              if (!localEl || remoteEl.version > localEl.version) {
+                map.set(remoteEl.id, remoteEl);
+              }
             });
-            nextElements.forEach((el: ExcalidrawElement) => versionMap.current.set(el.id, el.version));
-            
-            // Use 150ms to ensure Excalidraw's internal onChange fires while flag is still true
-            setTimeout(() => { isRemoteUpdate.current = false; }, 150);
+            nextElements = Array.from(map.values());
+          } else {
+            nextElements = msg.elements;
           }
-        });
-      });
-    };
 
-    initPeer();
+          isRemoteUpdate.current = true;
+          excalidrawAPI.current.updateScene({ 
+            elements: nextElements,
+            commitToHistory: false 
+          });
+          
+          nextElements.forEach((el: any) => versionMap.current.set(el.id, el.version));
+          setTimeout(() => { isRemoteUpdate.current = false; }, 100);
+        }
+      });
+    });
+
+    return () => { peer.destroy(); };
   }, [targetPeerId]);
 
-  // Use useMemo to ensure the throttled function is stable across re-renders
   const onBoardChange = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
-    if (isRemoteUpdate.current || !connectionRef.current || !connectionRef.current.open) return;
+    if (isRemoteUpdate.current || !connectionRef.current?.open) return;
 
     const updates = elements.filter((el) => {
-        const lastVersion = versionMap.current.get(el.id) || -1;
-        return el.version > lastVersion;
+      const lastVersion = versionMap.current.get(el.id) || -1;
+      return el.version > lastVersion;
     });
     
     if (updates.length > 0) {
-        updates.forEach((el) => versionMap.current.set(el.id, el.version));
-        connectionRef.current.send(JSON.stringify({ 
-            action: 'scene-update', 
-            elements: updates, 
-            isDiff: true 
-        }));
+      updates.forEach((el) => versionMap.current.set(el.id, el.version));
+      connectionRef.current.send(JSON.stringify({ 
+        action: 'scene-update', 
+        elements: updates, 
+        isDiff: true 
+      }));
     }
   }, 50), []);
 
   return (
-    <div className="fixed inset-0 h-screen w-screen overflow-hidden bg-gray-100">
-      {/* Status Indicator */}
-      <div 
-        className="absolute left-3 top-3 z-50 rounded-md bg-white/80 px-3 py-1 text-sm font-bold shadow-sm backdrop-blur-sm pointer-events-none"
-        style={{ color: statusColor }} // Keep dynamic color here
-      >
-        ● {status}
+    <div className="fixed inset-0 h-screen w-screen bg-gray-100">
+      <div className="absolute left-3 top-3 z-50 rounded bg-white/80 px-2 py-1 text-xs font-bold shadow">
+        {status}
       </div>
-
-      {/* Excalidraw Wrapper */}
-      <div className="h-full w-full">
-        <Excalidraw 
-          excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
-          onChange={onBoardChange}
-          theme="light"
-          UIOptions={{
-            canvasActions: {
-              toggleTheme: false,
-              export: false,
-              loadScene: false,
-              saveToActiveFile: false,
-              changeViewBackgroundColor: false
-            },
-            welcomeScreen: false
-          }}
-        />
-      </div>
+      <Excalidraw 
+        excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
+        onChange={onBoardChange}
+        UIOptions={{ welcomeScreen: false }}
+      />
     </div>
   );
 };

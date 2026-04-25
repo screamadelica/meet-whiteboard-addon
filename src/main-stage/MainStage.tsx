@@ -1,37 +1,28 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { meet } from '@googleworkspace/meet-addons';
 import { Excalidraw } from "@excalidraw/excalidraw";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
-import throttle from 'lodash.throttle'; // Run: npm install lodash.throttle
+import throttle from 'lodash.throttle';
 
 const PREFIX = "meetboard-xyz-";
 
 const MainStage = () => {
-  // --- State ---
   const [pin, setPin] = useState<string>('');
   const [isLobby, setIsLobby] = useState(true);
-  const [status, setStatus] = useState('Waiting for peers...');
   const [activeConnections, setActiveConnections] = useState<DataConnection[]>([]);
   
-  // --- Refs for non-reactive logic ---
   const excalidrawAPI = useRef<any>(null);
   const peerInstance = useRef<Peer | null>(null);
   const isRemoteUpdate = useRef(false);
-  const lastSentVersionMap = useRef(new Map());
+  const lastSentVersionMap = useRef(new Map<string, number>());
 
-  const mobileUrl = `${window.location.origin}/mobile.html?peerId=${PREFIX + pin}`;
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(mobileUrl)}`;
-  
-  // --- 1. Init Meet SDK ---
+  // --- 1. Meet SDK Init ---
   useEffect(() => {
     const initMeet = async () => {
       try {
-        const session = await meet.addon.createAddonSession({
-          cloudProjectNumber: "547958960288"
-        });
+        const session = await meet.addon.createAddonSession({ cloudProjectNumber: "547958960288" });
         await session.createMainStageClient();
-
-        console.log("Main Stage Handshake Complete");
       } catch (e) {
         console.error("Meet SDK Handshake Failed:", e);
       }
@@ -39,99 +30,113 @@ const MainStage = () => {
     initMeet();
   }, []);
 
-  // --- 2. PeerJS Logic ---
+  // --- 2. Throttled Broadcast ---
+  // useMemo ensures we don't recreate the throttle on every render, 
+  // but we pass activeConnections as a dependency or use a ref.
+  const throttledBroadcast = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
+    if (isRemoteUpdate.current || activeConnections.length === 0) return;
+    
+    // Only send what changed
+    const updates = elements.filter(el => el.version > (lastSentVersionMap.current.get(el.id) || -1));
+    if (updates.length === 0) return;
+
+    const message = JSON.stringify({ action: 'scene-update', elements: updates, isDiff: true });
+    
+    activeConnections.forEach(conn => {
+      if (conn.open) {
+        conn.send(message);
+      }
+    });
+
+    updates.forEach(el => lastSentVersionMap.current.set(el.id, el.version));
+  }, 50), [activeConnections]);
+
+  // --- 3. Connection Logic ---
   const setupConnection = (conn: DataConnection) => {
     conn.on('open', () => {
       setActiveConnections(prev => [...prev, conn]);
-      setStatus(`Connected to peers!`);
       
-      // Sync initial state
+      // Send full snapshot to new peer
       if (excalidrawAPI.current) {
         conn.send(JSON.stringify({ 
           action: 'scene-update', 
-          elements: excalidrawAPI.current.getSceneElements() 
+          elements: excalidrawAPI.current.getSceneElements(),
+          isDiff: false 
         }));
       }
     });
 
     conn.on('data', (data: any) => {
-      const drawData = JSON.parse(data);
-      if (drawData.action === 'scene-update' && excalidrawAPI.current) {
-        isRemoteUpdate.current = true;
-        excalidrawAPI.current.updateScene({ elements: drawData.elements });
-        setTimeout(() => { isRemoteUpdate.current = false; }, 50);
-      }
+      try {
+        const drawData = JSON.parse(data);
+        if (drawData.action === 'scene-update' && excalidrawAPI.current) {
+          const currentElements = excalidrawAPI.current.getSceneElements();
+          let nextElements;
+
+          if (drawData.isDiff) {
+            // MERGE LOGIC: Prevent deleting existing elements
+            const map = new Map(currentElements.map((e: any) => [e.id, e]));
+            drawData.elements.forEach((remoteEl: any) => {
+              const localEl = map.get(remoteEl.id);
+              if (!localEl || remoteEl.version > localEl.version) {
+                map.set(remoteEl.id, remoteEl);
+              }
+            });
+            nextElements = Array.from(map.values());
+          } else {
+            nextElements = drawData.elements;
+          }
+
+          isRemoteUpdate.current = true;
+          excalidrawAPI.current.updateScene({ elements: nextElements });
+          nextElements.forEach((el: any) => lastSentVersionMap.current.set(el.id, el.version));
+          
+          // Relay to other peers (Bridge mode)
+          activeConnections.forEach(otherConn => {
+            if (otherConn.open && otherConn.peer !== conn.peer) {
+              otherConn.send(data);
+            }
+          });
+
+          setTimeout(() => { isRemoteUpdate.current = false; }, 100);
+        }
+      } catch (e) { console.error("Data parse error", e); }
+    });
+
+    conn.on('close', () => {
+      setActiveConnections(prev => prev.filter(c => c.peer !== conn.peer));
     });
   };
 
-  const handleCreateBoard = async () => {
+  const handleCreateBoard = () => {
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     setPin(newPin);
-    
-    peerInstance.current = new Peer(PREFIX + newPin);
-    peerInstance.current.on('open', () => setIsLobby(false));
-    peerInstance.current.on('connection', setupConnection);
+    const peer = new Peer(PREFIX + newPin);
+    peerInstance.current = peer;
+    peer.on('open', () => setIsLobby(false));
+    peer.on('connection', setupConnection);
   };
 
-  // --- 3. Excalidraw Broadcasting ---
-  const throttledBroadcast = throttle((elements) => {
-    if (isRemoteUpdate.current || activeConnections.length === 0) return;
-    
-    activeConnections.forEach(conn => {
-      if (conn.open) {
-        conn.send(JSON.stringify({ action: 'scene-update', elements }));
-      }
-    });
-  }, 50);
-
-  // --- Render ---
   if (isLobby) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center bg-gray-100 text-gray-900">
-        <div className="w-full max-w-md rounded-lg bg-white p-8 text-center shadow-lg">
-          <h2 className="mb-6 text-2xl font-bold">Collaborative Whiteboard</h2>
-          <button 
-            onClick={handleCreateBoard}
-            className="rounded bg-blue-600 px-6 py-2 text-white transition-colors hover:bg-blue-700 active:bg-blue-800"
-          >
-            Create New Board
-          </button>
-        </div>
+      <div className="flex h-screen flex-col items-center justify-center bg-gray-100">
+        <button onClick={handleCreateBoard} className="rounded bg-blue-600 px-6 py-2 text-white">
+          Create New Board
+        </button>
       </div>  
     );
   }
 
   return (
-  <div className="flex h-screen flex-col bg-gray-50 overflow-hidden">
-      {/* Header with Room Info */}
-      <div className="flex items-center justify-between bg-white p-4 shadow-sm border-b border-gray-200">
-        <div className="flex items-center gap-6">
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">Room PIN</h2>
-            <p className="text-2xl font-black text-blue-600">{pin}</p>
-          </div>
-          
-          {/* QR Code Section */}
-          <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200 shadow-inner">
-            <img 
-              src={qrCodeUrl} 
-              alt="Scan to join" 
-              className="h-16 w-16 rounded border border-white shadow-sm bg-white"
-            />
-            <div>
-              <p className="text-xs font-bold text-gray-700">Draw from Phone!</p>
-              <p className="text-[10px] text-gray-400">Scan to collaborate</p>
-            </div>
-          </div>
-        </div>
+    <div className="flex h-screen flex-col overflow-hidden">
+      <div className="flex items-center justify-between bg-white p-4 border-b">
+        <p className="text-2xl font-black text-blue-600">PIN: {pin}</p>
+        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}/mobile.html?peerId=${PREFIX + pin}`)}`} alt="QR" className="h-12 w-12" />
       </div>
-
-      {/* Excalidraw Canvas Area */}
-      <div className="relative flex-1 bg-white">
+      <div className="relative flex-1">
         <Excalidraw 
           excalidrawAPI={(api) => (excalidrawAPI.current = api)}
           onChange={throttledBroadcast}
-          theme="light"
         />
       </div>
     </div>
