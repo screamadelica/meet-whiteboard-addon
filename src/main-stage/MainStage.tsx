@@ -148,6 +148,10 @@ const MainStage = () => {
         <Excalidraw 
           excalidrawAPI={(api) => (excalidrawAPI.current = api)}
           onChange={throttledBroadcast}
+          UIOptions={{ 
+            dockedSidebarBreakpoint: 0,
+            welcomeScreen: false 
+          }}
         />
       </div>
     </div>
