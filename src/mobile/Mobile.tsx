@@ -23,39 +23,39 @@ const MobileController = () => {
       connectionRef.current = conn;
 
       conn.on('open', () => setStatus("Connected"));
+
       conn.on('data', (data: any) => {
-        const msg = JSON.parse(data);
-        if (msg.action === 'scene-update' && excalidrawAPI.current) {
-          // Optimization: Don't interrupt user if they are drawing
-          const appState = excalidrawAPI.current.getAppState();
-          if (appState.draggingElement || appState.resizingElement || appState.editingElement) return;
-
-          const currentElements = excalidrawAPI.current.getSceneElements();
-          let nextElements;
-
-          if (msg.isDiff) {
-            const map = new Map(currentElements.map((e: any) => [e.id, e]));
-            
-            msg.elements.forEach((remoteEl: any) => {
-              const localEl = map.get(remoteEl.id);
-              if (!localEl || remoteEl.version > localEl.version) {
-                map.set(remoteEl.id, remoteEl);
-              }
-            });
-            
-            const nextElements = Array.from(map.values());
-          } else {
-            nextElements = msg.elements;
-          }
-
-          isRemoteUpdate.current = true;
-          excalidrawAPI.current.updateScene({ 
-            elements: nextElements,
-            commitToHistory: false 
-          });
+        try {
+          const incomingData = JSON.parse(data); // Using 'incomingData' consistently
           
-          nextElements.forEach((el: any) => versionMap.current.set(el.id, el.version));
-          setTimeout(() => { isRemoteUpdate.current = false; }, 100);
+          if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
+            const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
+            let nextElements: ExcalidrawElement[];
+
+            if (incomingData.isDiff) {
+              const map = new Map<string, ExcalidrawElement>(
+                currentElements.map((e) => [e.id, e])
+              );
+
+              (incomingData.elements as ExcalidrawElement[]).forEach((remoteEl) => {
+                const localEl = map.get(remoteEl.id);
+                if (!localEl || remoteEl.version > localEl.version) {
+                  map.set(remoteEl.id, remoteEl);
+                }
+              });
+              nextElements = Array.from(map.values());
+            } else {
+              nextElements = incomingData.elements;
+            }
+
+            isRemoteUpdate.current = true;
+            excalidrawAPI.current.updateScene({ elements: nextElements });
+            
+            nextElements.forEach((el) => versionMap.current.set(el.id, el.version));
+            setTimeout(() => { isRemoteUpdate.current = false; }, 100);
+          }
+        } catch (e) {
+          console.error("Mobile parse error", e);
         }
       });
     });

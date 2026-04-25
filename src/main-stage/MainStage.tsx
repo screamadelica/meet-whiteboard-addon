@@ -68,30 +68,39 @@ const MainStage = () => {
 
     conn.on('data', (data: any) => {
       try {
-        const drawData = JSON.parse(data);
-        if (drawData.action === 'scene-update' && excalidrawAPI.current) {
-          const currentElements = excalidrawAPI.current.getSceneElements();
-          let nextElements;
+        // 1. Parse the incoming string
+        const incomingData = JSON.parse(data);
 
-          if (drawData.isDiff) {
-            const map = new Map(currentElements.map((e: any) => [e.id, e]));
-            drawData.elements.forEach((remoteEl: any) => {
+        if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
+          const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
+          let nextElements: ExcalidrawElement[];
+
+          if (incomingData.isDiff) {
+            // MERGE LOGIC: Use the Map with explicit types
+            const map = new Map<string, ExcalidrawElement>(
+              currentElements.map((e) => [e.id, e])
+            );
+
+            // Cast incoming elements to ExcalidrawElement[] to access .version
+            (incomingData.elements as ExcalidrawElement[]).forEach((remoteEl) => {
               const localEl = map.get(remoteEl.id);
               if (!localEl || remoteEl.version > localEl.version) {
                 map.set(remoteEl.id, remoteEl);
               }
             });
             nextElements = Array.from(map.values());
-
           } else {
-            nextElements = drawData.elements;
+            nextElements = incomingData.elements;
           }
 
+          // 2. Update the scene
           isRemoteUpdate.current = true;
           excalidrawAPI.current.updateScene({ elements: nextElements });
-          nextElements.forEach((el: any) => lastSentVersionMap.current.set(el.id, el.version));
           
-          // Relay to other peers (Bridge mode)
+          // Update our local version tracker so we don't bounce this back
+          nextElements.forEach((el) => lastSentVersionMap.current.set(el.id, el.version));
+
+          // 3. Relay to other connected mobile devices (Bridge mode)
           activeConnections.forEach(otherConn => {
             if (otherConn.open && otherConn.peer !== conn.peer) {
               otherConn.send(data);
@@ -100,7 +109,9 @@ const MainStage = () => {
 
           setTimeout(() => { isRemoteUpdate.current = false; }, 100);
         }
-      } catch (e) { console.error("Data parse error", e); }
+      } catch (e) {
+        console.error("Data parse error", e);
+      }
     });
 
     conn.on('close', () => {
