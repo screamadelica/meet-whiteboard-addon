@@ -82,7 +82,7 @@ const MobileController = () => {
   }, 50), []);
 
   return (
-    <div className="fixed inset-0 h-screen w-screen bg-gray-100">
+    <div className="fixed inset-0 h-dvh w-screen bg-gray-100 overflow-hidden">
       <div className="absolute left-3 top-3 z-50 rounded bg-white/80 px-2 py-1 text-xs font-bold shadow">
         {status}
       </div>
