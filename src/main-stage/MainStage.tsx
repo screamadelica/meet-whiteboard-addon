@@ -151,7 +151,7 @@ const MainStage = () => {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <div className="relative flex-1" >
-        <div className="custom-styles h-full theme--dark">
+        <div className="custom-styles h-full">
           <Excalidraw 
             theme="dark"
             excalidrawAPI={(api) => (excalidrawAPI.current = api)}
