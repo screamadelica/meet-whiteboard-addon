@@ -150,14 +150,17 @@ const MainStage = () => {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <div className="relative flex-1" >
-        <Excalidraw 
-          excalidrawAPI={(api) => (excalidrawAPI.current = api)}
-          onChange={throttledBroadcast}
-          UIOptions={{ 
-            dockedSidebarBreakpoint: 0,
-            welcomeScreen: false,
-          }}
-        />
+        <div className="custom-styles">
+          <Excalidraw 
+            theme="dark"
+            excalidrawAPI={(api) => (excalidrawAPI.current = api)}
+            onChange={throttledBroadcast}
+            UIOptions={{ 
+              dockedSidebarBreakpoint: 0,
+              welcomeScreen: false,
+            }}
+          />
+        </div>
       </div>
     </div>
   );

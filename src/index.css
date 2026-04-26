@@ -1,20 +1,16 @@
 @import "tailwindcss";
 
-/* 1. Hide the "Properties Panel" (colors, opacity, etc.) */
-.excalidraw .island.side-panel {
-  display: none !important;
+
+.custom-styles .excalidraw {
+  --color-primary: #fcc6d9;
+  --color-primary-darker: #f783ac;
+  --color-primary-darkest: #e64980;
+  --color-primary-light: #f2a9c4;
 }
 
-/* 2. Hide all toolbar buttons except Pen (index 9) and Eraser (index 10) */
-/* Note: Excalidraw tools are often grouped in a container. 
-   We hide all children and then selectively show the ones we want. */
-
-.excalidraw .App-toolbar .Stack > div:not(:nth-child(9)):not(:nth-child(10)) {
-  display: none !important;
-}
-
-/* 3. Hide the 'Help' and 'Library' buttons in the corners */
-.excalidraw .App-menu_bottom,
-.excalidraw .layer-ui__wrapper__footer-right {
-  display: none !important;
+.custom-styles .excalidraw.theme--dark {
+  --color-primary: #d494aa;
+  --color-primary-darker: #d64c7e;
+  --color-primary-darkest: #e86e99;
+  --color-primary-light: #dcbec9;
 }
