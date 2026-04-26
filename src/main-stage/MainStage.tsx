@@ -123,8 +123,12 @@ const MainStage = () => {
   const handleCreateBoard = async () => {
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     setPin(newPin);
+    let message = {
+      action: "pin",
+      value: newPin,
+    };
     if (mainStageClient.current) {
-      await mainStageClient.current.notifySidePanel("Hello from the MainStage!")
+      await mainStageClient.current.notifySidePanel(JSON.stringify(message))
     }
     const peer = new Peer(PREFIX + newPin);
     peerInstance.current = peer;

@@ -17,7 +17,9 @@ const SidePanel = () => {
         setClient(sidePanelClient);
 
         sidePanelClient.on('frameToFrameMessage', (arg) => {
-          console.log("Message received:", arg.payload);
+          const receivedMessage = JSON.parse(arg.payload);
+          console.log("Message received action:", receivedMessage.action);
+          console.log("Message received value:", receivedMessage.value);
         });
 
       } catch (error) {
