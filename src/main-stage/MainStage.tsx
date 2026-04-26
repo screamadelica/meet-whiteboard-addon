@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { meet } from '@googleworkspace/meet-addons';
 import { Excalidraw } from "@excalidraw/excalidraw";
+import "../index.css";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
 import throttle from 'lodash.throttle';
@@ -150,7 +151,7 @@ const MainStage = () => {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <div className="relative flex-1" >
-        <div className="custom-styles h-full">
+        <div className="custom-styles h-full theme--dark">
           <Excalidraw 
             theme="dark"
             excalidrawAPI={(api) => (excalidrawAPI.current = api)}
