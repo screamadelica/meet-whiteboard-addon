@@ -47,17 +47,7 @@ const SidePanel = () => {
       <p className="text-sm leading-5 mb-2">
         Collaborate with your team by launching the whiteboard on the main stage.
       </p>
-
-      {pin && (
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center my-2 flex flex-col items-center gap-3">
-          <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Session PIN</span>
-          <div className="bg-white p-2 rounded-md shadow-sm border border-slate-100">
-            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}/mobile.html?peerId=${prefix + pin}`)}`} alt="QR" className="h-20 w-20" />
-          </div>
-          <span className="text-2xl font-mono font-bold text-[#1a73e8] tracking-[0.2em]">{pin}</span>
-        </div>
-      )}
-
+      
       <button
         onClick={handleLaunch}
         disabled={!client}
@@ -67,6 +57,16 @@ const SidePanel = () => {
       >
         {client ? "Launch Main Stage" : "Initializing..."}
       </button>
+      
+      {pin && (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center my-2 flex flex-col items-center gap-3">
+          <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Session PIN</span>
+          <div className="bg-white p-2 rounded-md shadow-sm border border-slate-100">
+            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}/mobile.html?peerId=${prefix + pin}`)}`} alt="QR" className="h-30 w-30" />
+          </div>
+          <span className="text-2xl font-mono font-bold text-[#1a73e8] tracking-[0.2em]">{pin}</span>
+        </div>
+      )}
     </div>
   );
 };
