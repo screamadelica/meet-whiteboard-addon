@@ -89,8 +89,16 @@ const MobileController = () => {
       <Excalidraw 
         excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
         onChange={onBoardChange}
-        UIOptions={{ welcomeScreen: false }}
-      />
+        UIOptions={{ 
+          welcomeScreen: false,
+          canvasActions: {
+            toggleTheme: false,
+            export: false,
+            loadScene: false,
+            changeViewBackgroundColor: false,
+          }
+        }}
+      />   
     </div>
   );
 };
