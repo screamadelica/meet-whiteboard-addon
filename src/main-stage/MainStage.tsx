@@ -9,6 +9,15 @@ import throttle from 'lodash.throttle';
 const PREFIX = "meetboard-xyz-";
 
 const MainStage = () => {
+  const themeOverrides = {
+    "--color-primary": "#d494aa",
+    "--color-primary-darker": "#d64c7e",
+    "--color-primary-darkest": "#e86e99",
+    "--color-primary-light": "#dcbec9",
+    "--default-bg-color": "#7cec13",
+    "--canvas-background-color": "#7cec13",
+  } as React.CSSProperties;
+  
   const [pin, setPin] = useState<string>('');
   const [isLobby, setIsLobby] = useState(true);
   const [activeConnections, setActiveConnections] = useState<DataConnection[]>([]);
@@ -151,7 +160,7 @@ const MainStage = () => {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <div className="relative flex-1" >
-        <div className="custom-styles h-full">
+        <div className="custom-styles h-full" style={themeOverrides}>
           <Excalidraw 
             theme="dark"
             excalidrawAPI={(api) => (excalidrawAPI.current = api)}
