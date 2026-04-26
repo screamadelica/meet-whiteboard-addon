@@ -148,15 +148,17 @@ const MainStage = () => {
         <p className="text-2xl font-black text-blue-600">PIN: {pin}</p>
         <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}/mobile.html?peerId=${PREFIX + pin}`)}`} alt="QR" className="h-12 w-12" />
       </div>
-      <div className="relative flex-1">
-        <Excalidraw 
-          excalidrawAPI={(api) => (excalidrawAPI.current = api)}
-          onChange={throttledBroadcast}
-          UIOptions={{ 
-            dockedSidebarBreakpoint: 0,
-            welcomeScreen: false,
-          }}
-        />
+      <div className="relative flex-1" >
+        <div className="[&_.island.side-panel]:hidden">
+          <Excalidraw 
+            excalidrawAPI={(api) => (excalidrawAPI.current = api)}
+            onChange={throttledBroadcast}
+            UIOptions={{ 
+              dockedSidebarBreakpoint: 0,
+              welcomeScreen: false,
+            }}
+          />
+        </div>
       </div>
     </div>
   );
