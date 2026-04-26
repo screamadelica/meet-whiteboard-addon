@@ -4,6 +4,7 @@ import { meet } from '@googleworkspace/meet-addons';
 const SidePanel = () => {
   const [client, setClient] = useState<any>(null);
   const [pin, setPin] = useState<string | null>(null);
+  const [prefix, setPrefix] = useState<string | null>(null);
 
   useEffect(() => {
     const initMeet = async () => {
@@ -18,8 +19,10 @@ const SidePanel = () => {
 
         sidePanelClient.on('frameToFrameMessage', (arg) => {
           const receivedMessage = JSON.parse(arg.payload);
-          console.log("Message received action:", receivedMessage.action);
-          console.log("Message received value:", receivedMessage.value);
+          if (receivedMessage.action === 'pin') {
+            setPin(receivedMessage.value);
+            setPrefix(receivedMessage.prefix);
+          }
         });
 
       } catch (error) {
@@ -46,8 +49,11 @@ const SidePanel = () => {
       </p>
 
       {pin && (
-        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center my-2">
-          <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Session PIN</span>
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center my-2 flex flex-col items-center gap-3">
+          <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Session PIN</span>
+          <div className="bg-white p-2 rounded-md shadow-sm border border-slate-100">
+            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}/mobile.html?peerId=${prefix + pin}`)}`} alt="QR" className="h-20 w-20" />
+          </div>
           <span className="text-2xl font-mono font-bold text-[#1a73e8] tracking-[0.2em]">{pin}</span>
         </div>
       )}

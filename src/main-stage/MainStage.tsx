@@ -125,6 +125,7 @@ const MainStage = () => {
     setPin(newPin);
     let message = {
       action: "pin",
+      prefix: PREFIX,
       value: newPin,
     };
     if (mainStageClient.current) {
