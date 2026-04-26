@@ -154,7 +154,7 @@ const MainStage = () => {
           onChange={throttledBroadcast}
           UIOptions={{ 
             dockedSidebarBreakpoint: 0,
-            welcomeScreen: false 
+            welcomeScreen: false,
           }}
         />
       </div>

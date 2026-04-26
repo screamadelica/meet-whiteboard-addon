@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+/* This targets the Properties Panel (colors, opacity, etc.) */
+.excalidraw .island.side-panel {
+  display: none !important;
+}
