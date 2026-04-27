@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { meet } from '@googleworkspace/meet-addons';
 import { Excalidraw } from "@excalidraw/excalidraw";
-import "../index.css";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
 import throttle from 'lodash.throttle';
+import "../whiteboard.css";
 
 const PREFIX = "meetboard-xyz-";
 
@@ -21,7 +21,9 @@ const MainStage = () => {
   const [pin, setPin] = useState<string>('');
   const [isLobby, setIsLobby] = useState(true);
   const [activeConnections, setActiveConnections] = useState<DataConnection[]>([]);
-  
+  const [showStyles, setShowStyles] = useState(false);
+  const [isDrawTool, setIsDrawTool] = useState(false);  
+
   const excalidrawAPI = useRef<any>(null);
   const peerInstance = useRef<Peer | null>(null);
   const mainStageClient = useRef<any>(null);
@@ -160,6 +162,23 @@ const MainStage = () => {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <div className="relative flex-1" >
+        <div className={`whiteboard ${showStyles ? "" : "hide-style-panel"}`}>
+          <Excalidraw 
+            excalidrawAPI={(api) => (excalidrawAPI.current = api)}
+            onChange={throttledBroadcast}
+            renderTopRightUI={() =>
+              isDrawTool ? (
+                <button
+                  className="ToolIcon_type_button"
+                  title="Toggle style panel"
+                  onClick={() => setShowStyles(v => !v)}
+                >
+                  🎨
+                </button>
+              ) : null
+            }
+          />
+        </div>        
         <div className="custom-styles h-full" style={themeOverrides}>
           <Excalidraw 
             theme="dark"
