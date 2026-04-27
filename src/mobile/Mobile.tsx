@@ -3,6 +3,7 @@ import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
 import throttle from 'lodash.throttle';
+import "./whiteboard.css";
 
 const MobileController = () => {
   const [status, setStatus] = useState("Connecting...");
@@ -85,20 +86,22 @@ const MobileController = () => {
     <div className="fixed inset-0 h-dvh w-screen bg-gray-100 overflow-hidden">
       <div className="absolute left-3 top-3 z-50 rounded bg-white/80 px-2 py-1 text-xs font-bold shadow">
         {status}
-      </div>
-      <Excalidraw 
-        excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
-        onChange={onBoardChange}
-        UIOptions={{ 
-          welcomeScreen: false,
-          canvasActions: {
-            toggleTheme: false,
-            export: false,
-            loadScene: false,
-            changeViewBackgroundColor: false,
-          }
-        }}
-      />   
+      </div>      
+      <div className={`whiteboard`}>
+        <Excalidraw 
+          excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
+          onChange={onBoardChange}
+          UIOptions={{ 
+            welcomeScreen: false,
+            canvasActions: {
+              toggleTheme: false,
+              export: false,
+              loadScene: false,
+              changeViewBackgroundColor: false,
+            }
+          }}
+        />
+      </div>   
     </div>
   );
 };

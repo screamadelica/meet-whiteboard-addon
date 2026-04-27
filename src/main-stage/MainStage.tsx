@@ -4,7 +4,7 @@ import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
 import throttle from 'lodash.throttle';
-import "../whiteboard.css";
+import "./whiteboard.css";
 
 const PREFIX = "meetboard-xyz-";
 
