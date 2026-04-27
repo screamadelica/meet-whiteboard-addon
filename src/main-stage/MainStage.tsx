@@ -162,10 +162,13 @@ const MainStage = () => {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <div className="relative flex-1" >
-        <div className={`whiteboard ${showStyles ? "" : "hide-style-panel"}`}>
+        <div className={`whiteboard h-full ${showStyles ? "" : "hide-style-panel"}`}>
           <Excalidraw 
             excalidrawAPI={(api) => (excalidrawAPI.current = api)}
-            onChange={throttledBroadcast}
+            onChange={(elements, appState) => {
+              setIsDrawTool(appState.activeTool.type === "freedraw");
+              throttledBroadcast;
+            }}
             renderTopRightUI={() =>
               isDrawTool ? (
                 <button
@@ -179,17 +182,6 @@ const MainStage = () => {
             }
           />
         </div>        
-        <div className="custom-styles h-full" style={themeOverrides}>
-          <Excalidraw 
-            theme="dark"
-            excalidrawAPI={(api) => (excalidrawAPI.current = api)}
-            onChange={throttledBroadcast}
-            UIOptions={{ 
-              dockedSidebarBreakpoint: 0,
-              welcomeScreen: false,
-            }}
-          />
-        </div>
       </div>
     </div>
   );
