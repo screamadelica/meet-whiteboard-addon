@@ -9,6 +9,15 @@ import "./whiteboard.css";
 const PREFIX = "meetboard-xyz-";
 
 const MainStage = () => {
+  const themeOverrides = {
+    "--color-primary": "#d494aa",
+    "--color-primary-darker": "#d64c7e",
+    "--color-primary-darkest": "#e86e99",
+    "--color-primary-light": "#dcbec9",
+    "--default-bg-color": "#7cec13",
+    "--canvas-background-color": "#7cec13",
+  } as React.CSSProperties;
+  
   const [pin, setPin] = useState<string>('');
   const [isLobby, setIsLobby] = useState(true);
   const [activeConnections, setActiveConnections] = useState<DataConnection[]>([]);
@@ -37,37 +46,15 @@ const MainStage = () => {
   // --- 2. Throttled Broadcast ---
   // useMemo ensures we don't recreate the throttle on every render, 
   // but we pass activeConnections as a dependency or use a ref.
-  const throttledBroadcast = useMemo(() => throttle((
-    elements: readonly ExcalidrawElement[],
-    appState: any) => { // Add appState parameter
+  const throttledBroadcast = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
     if (isRemoteUpdate.current || activeConnections.length === 0) return;
     
     // Only send what changed
     const updates = elements.filter(el => el.version > (lastSentVersionMap.current.get(el.id) || -1));
     if (updates.length === 0) return;
 
-    //const message = JSON.stringify({ action: 'scene-update', elements: updates, isDiff: true });
-
-    // Prepare appState for broadcast if laser tool is active
-    let appStateUpdate = null;
-    if (appState.activeTool.type === "laser") {
-      appStateUpdate = {
-        pointerX: appState.pointerX,
-        pointerY: appState.pointerY,
-        activeToolType: "laser",
-      };
-    }
-
-    // Only send if there are element updates OR appState updates
-    if (updates.length === 0 && !appStateUpdate) return;
-
-    const message = JSON.stringify({
-      action: 'scene-update',
-      elements: updates,
-      appState: appStateUpdate, // Include appState update
-      isDiff: true
-    });
-
+    const message = JSON.stringify({ action: 'scene-update', elements: updates, isDiff: true });
+    
     activeConnections.forEach(conn => {
       if (conn.open) {
         conn.send(message);
@@ -122,26 +109,6 @@ const MainStage = () => {
           // 2. Update the scene
           isRemoteUpdate.current = true;
           excalidrawAPI.current.updateScene({ elements: nextElements });
-
-          // Update appState if present (for laser pointer)
-          if (incomingData.appState && incomingData.appState.activeToolType === 'laser') {
-            excalidrawAPI.current.updateScene({
-              appState: {
-                activeTool: { type: 'laser', lastActiveTool: null, locked: false }, // Provide minimal activeTool object
-                pointerX: incomingData.appState.pointerX,
-                pointerY: incomingData.appState.pointerY,
-              }
-            });
-          } else if (incomingData.appState && incomingData.appState.activeToolType !== 'laser') {
-            // If a non-laser tool is active remotely, clear the local laser pointer
-            excalidrawAPI.current.updateScene({
-              appState: {
-                activeTool: { type: 'selection', lastActiveTool: null, locked: false }, // Reset to selection or null
-                pointerX: null,
-                pointerY: null,
-              }
-            });
-          }
           
           // Update our local version tracker so we don't bounce this back
           nextElements.forEach((el) => lastSentVersionMap.current.set(el.id, el.version));
@@ -200,7 +167,7 @@ const MainStage = () => {
             excalidrawAPI={(api) => (excalidrawAPI.current = api)}
             onChange={(elements, appState) => {
               setIsDrawTool(appState.activeTool.type === "freedraw");
-              throttledBroadcast(elements, appState); // Corrected call to pass appState
+              throttledBroadcast;
             }}
             renderTopRightUI={() =>
               isDrawTool ? (
