@@ -64,7 +64,9 @@ const MobileController = () => {
     return () => { peer.destroy(); };
   }, [targetPeerId]);
 
-  const onBoardChange = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
+  const onBoardChange = useMemo(() => throttle((
+    elements: readonly ExcalidrawElement[],
+    appState: any) => { // Add appState parameter
     if (isRemoteUpdate.current || !connectionRef.current?.open) return;
 
     const updates = elements.filter((el) => {
@@ -74,10 +76,24 @@ const MobileController = () => {
     
     if (updates.length > 0) {
       updates.forEach((el) => versionMap.current.set(el.id, el.version));
-      connectionRef.current.send(JSON.stringify({ 
-        action: 'scene-update', 
-        elements: updates, 
-        isDiff: true 
+    }
+
+    // Prepare appState for broadcast if laser tool is active
+    let appStateUpdate = null;
+    if (appState.activeTool.type === "laser") {
+      appStateUpdate = {
+        pointerX: appState.pointerX,
+        pointerY: appState.pointerY,
+        activeToolType: "laser",
+      };
+    }
+
+    if (updates.length > 0 || appStateUpdate) { // Only send if there are element updates OR appState updates
+      connectionRef.current.send(JSON.stringify({
+        action: 'scene-update',
+        elements: updates,
+        appState: appStateUpdate, // Include appState update
+        isDiff: true
       }));
     }
   }, 50), []);
@@ -90,7 +106,9 @@ const MobileController = () => {
       <div className={`whiteboard h-full`}>
         <Excalidraw 
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
-          onChange={onBoardChange}
+          onChange={(elements, appState) => {
+            onBoardChange(elements, appState); // Pass appState to the throttled handler
+          }}
           UIOptions={{ 
             welcomeScreen: false,
             canvasActions: {
