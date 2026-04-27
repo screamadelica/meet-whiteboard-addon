@@ -8,6 +8,7 @@ import "./whiteboard.css";
 const MobileController = () => {
   const [status, setStatus] = useState("Connecting...");
   const [isStarted, setIsStarted] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const excalidrawAPI = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
   const versionMap = useRef(new Map<string, number>());
@@ -16,32 +17,42 @@ const MobileController = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
 
-  // Function to request fullscreen and landscape lock
-  const startFullscreen = async () => {
-    const docElm = document.documentElement as any;
-    
+  const enterFullscreen = async () => {
+    if (!containerRef.current) return;
+
     try {
-      // 1. Enter Fullscreen
-      if (docElm.requestFullscreen) {
-        await docElm.requestFullscreen();
-      } else if (docElm.webkitRequestFullscreen) {
-        await docElm.webkitRequestFullscreen();
+      const el = containerRef.current as any;
+      
+      // Standard Fullscreen API
+      if (el.requestFullscreen) {
+        await el.requestFullscreen();
+      } else if (el.webkitRequestFullscreen) {
+        // Essential for iOS Safari
+        await el.webkitRequestFullscreen();
       }
 
-      // 2. Try to lock orientation to landscape (Android/Chrome)
-      if (screen.orientation && (screen.orientation as any).lock) {
-        await (screen.orientation as any).lock("landscape").catch((e: any) => console.log("Lock failed", e));
-      }
+      // Nudge the browser to hide the URL bar
+      window.scrollTo(0, 1);
     } catch (err) {
-      console.error("Fullscreen/Lock error:", err);
+      console.error("Fullscreen failed", err);
     } finally {
       setIsStarted(true);
     }
   };
 
+  // Auto-trigger fullscreen on rotation if already "started"
+  useEffect(() => {
+    const handleResize = () => {
+      if (isStarted && window.innerWidth > window.innerHeight) {
+        enterFullscreen();
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [isStarted]);
+
   useEffect(() => {
     if (!targetPeerId) return;
-
     const peer = new Peer();
     peer.on('open', () => {
       const conn = peer.connect(targetPeerId);
@@ -53,32 +64,25 @@ const MobileController = () => {
           if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
             const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
             let nextElements: ExcalidrawElement[];
-
             if (incomingData.isDiff) {
               const map = new Map<string, ExcalidrawElement>(currentElements.map((e) => [e.id, e]));
               (incomingData.elements as ExcalidrawElement[]).forEach((remoteEl) => {
                 const localEl = map.get(remoteEl.id);
-                if (!localEl || remoteEl.version > localEl.version) {
-                  map.set(remoteEl.id, remoteEl);
-                }
+                if (!localEl || remoteEl.version > localEl.version) map.set(remoteEl.id, remoteEl);
               });
               nextElements = Array.from(map.values());
             } else {
               nextElements = incomingData.elements;
             }
-
             isRemoteUpdate.current = true;
             excalidrawAPI.current.updateScene({ elements: nextElements });
             nextElements.forEach((el) => versionMap.current.set(el.id, el.version));
             setTimeout(() => { isRemoteUpdate.current = false; }, 100);
           }
-        } catch (e) {
-          console.error("Mobile parse error", e);
-        }
+        } catch (e) { console.error("Mobile parse error", e); }
       });
     });
-
-    return () => { peer.destroy(); };
+    return () => peer.destroy();
   }, [targetPeerId]);
 
   const onBoardChange = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
@@ -91,26 +95,29 @@ const MobileController = () => {
   }, 50), []);
 
   return (
-    <div className="fixed inset-0 h-dvh w-screen bg-gray-100 overflow-hidden">
-      {/* Interaction Overlay: Crucial for browser security policies */}
+    <div 
+      ref={containerRef} 
+      className="fixed inset-0 h-screen w-screen bg-white overflow-hidden touch-none"
+    >
       {!isStarted && (
-        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 text-white p-6 text-center">
-          <h2 className="text-xl font-bold mb-4">Landscape Whiteboard Mode</h2>
-          <p className="mb-8 opacity-80">Rotate your phone and click the button below to start.</p>
+        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-gray-900 text-white">
           <button 
-            onClick={startFullscreen}
-            className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-full font-bold text-lg shadow-lg active:scale-95 transition-transform"
+            onClick={enterFullscreen}
+            className="bg-blue-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl"
           >
-            Enter Fullscreen
+            Go Fullscreen
           </button>
+          <p className="mt-4 text-sm opacity-70 text-center px-6">
+            Tap to hide browser bars and start drawing
+          </p>
         </div>
       )}
 
-      <div className="absolute left-3 top-3 z-50 rounded bg-white/80 px-2 py-1 text-xs font-bold shadow text-black">
-        {status} {window.innerWidth > window.innerHeight ? "(Landscape)" : "(Portrait)"}
+      <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md">
+        {status}
       </div>      
       
-      <div className="whiteboard h-full">
+      <div className="h-full w-full">
         <Excalidraw 
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
           onChange={onBoardChange}
