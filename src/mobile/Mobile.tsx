@@ -7,6 +7,7 @@ import "./whiteboard.css";
 
 const MobileController = () => {
   const [status, setStatus] = useState("Connecting...");
+  const [isStarted, setIsStarted] = useState(false);
   const excalidrawAPI = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
   const versionMap = useRef(new Map<string, number>());
@@ -15,43 +16,28 @@ const MobileController = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
 
-  // Helper to trigger fullscreen with cross-browser support
-  const toggleFullscreen = async (enter: boolean) => {
+  // Function to request fullscreen and landscape lock
+  const startFullscreen = async () => {
     const docElm = document.documentElement as any;
+    
     try {
-      if (enter) {
-        if (docElm.requestFullscreen) {
-          await docElm.requestFullscreen();
-        } else if (docElm.webkitRequestFullscreen) {
-          await docElm.webkitRequestFullscreen();
-        }
-      } else {
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if ((document as any).webkitExitFullscreen) {
-          await (document as any).webkitExitFullscreen();
-        }
+      // 1. Enter Fullscreen
+      if (docElm.requestFullscreen) {
+        await docElm.requestFullscreen();
+      } else if (docElm.webkitRequestFullscreen) {
+        await docElm.webkitRequestFullscreen();
+      }
+
+      // 2. Try to lock orientation to landscape (Android/Chrome)
+      if (screen.orientation && (screen.orientation as any).lock) {
+        await (screen.orientation as any).lock("landscape").catch((e: any) => console.log("Lock failed", e));
       }
     } catch (err) {
-      console.warn("Fullscreen toggle blocked or failed:", err);
+      console.error("Fullscreen/Lock error:", err);
+    } finally {
+      setIsStarted(true);
     }
   };
-
-  useEffect(() => {
-    const handleOrientation = () => {
-      const isLandscape = window.innerWidth > window.innerHeight;
-      // We attempt to toggle, but this may fail without a prior user gesture
-      toggleFullscreen(isLandscape);
-    };
-
-    window.addEventListener("resize", handleOrientation);
-    window.addEventListener("orientationchange", handleOrientation);
-
-    return () => {
-      window.removeEventListener("resize", handleOrientation);
-      window.removeEventListener("orientationchange", handleOrientation);
-    };
-  }, []);
 
   useEffect(() => {
     if (!targetPeerId) return;
@@ -67,6 +53,7 @@ const MobileController = () => {
           if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
             const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
             let nextElements: ExcalidrawElement[];
+
             if (incomingData.isDiff) {
               const map = new Map<string, ExcalidrawElement>(currentElements.map((e) => [e.id, e]));
               (incomingData.elements as ExcalidrawElement[]).forEach((remoteEl) => {
@@ -79,6 +66,7 @@ const MobileController = () => {
             } else {
               nextElements = incomingData.elements;
             }
+
             isRemoteUpdate.current = true;
             excalidrawAPI.current.updateScene({ elements: nextElements });
             nextElements.forEach((el) => versionMap.current.set(el.id, el.version));
@@ -89,36 +77,39 @@ const MobileController = () => {
         }
       });
     });
+
     return () => { peer.destroy(); };
   }, [targetPeerId]);
 
   const onBoardChange = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
-    // TRIGGER FULLSCREEN ON FIRST INTERACTION
-    // This bypasses the gesture requirement. If user is drawing in landscape, make it fullscreen.
-    if (window.innerWidth > window.innerHeight && !document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-      toggleFullscreen(true);
-    }
-
     if (isRemoteUpdate.current || !connectionRef.current?.open) return;
-    const updates = elements.filter((el) => {
-      const lastVersion = versionMap.current.get(el.id) || -1;
-      return el.version > lastVersion;
-    });
+    const updates = elements.filter((el) => (versionMap.current.get(el.id) || -1) < el.version);
     if (updates.length > 0) {
       updates.forEach((el) => versionMap.current.set(el.id, el.version));
-      connectionRef.current.send(JSON.stringify({ 
-        action: 'scene-update', 
-        elements: updates, 
-        isDiff: true 
-      }));
+      connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements: updates, isDiff: true }));
     }
   }, 50), []);
 
   return (
     <div className="fixed inset-0 h-dvh w-screen bg-gray-100 overflow-hidden">
-      <div className="absolute left-3 top-3 z-50 rounded bg-white/80 px-2 py-1 text-xs font-bold shadow">
-        {status}
+      {/* Interaction Overlay: Crucial for browser security policies */}
+      {!isStarted && (
+        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 text-white p-6 text-center">
+          <h2 className="text-xl font-bold mb-4">Landscape Whiteboard Mode</h2>
+          <p className="mb-8 opacity-80">Rotate your phone and click the button below to start.</p>
+          <button 
+            onClick={startFullscreen}
+            className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-full font-bold text-lg shadow-lg active:scale-95 transition-transform"
+          >
+            Enter Fullscreen
+          </button>
+        </div>
+      )}
+
+      <div className="absolute left-3 top-3 z-50 rounded bg-white/80 px-2 py-1 text-xs font-bold shadow text-black">
+        {status} {window.innerWidth > window.innerHeight ? "(Landscape)" : "(Portrait)"}
       </div>      
+      
       <div className="whiteboard h-full">
         <Excalidraw 
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
