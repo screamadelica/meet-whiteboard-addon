@@ -87,7 +87,7 @@ const MobileController = () => {
       <div className="absolute left-3 top-3 z-50 rounded bg-white/80 px-2 py-1 text-xs font-bold shadow">
         {status}
       </div>      
-      <div className={`whiteboard`}>
+      <div className={`whiteboard h-full`}>
         <Excalidraw 
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
           onChange={onBoardChange}
