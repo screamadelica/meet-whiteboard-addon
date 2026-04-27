@@ -15,6 +15,56 @@ const MobileController = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
 
+  // --- Fullscreen Orientation Logic ---
+  useEffect(() => {
+    const handleOrientationChange = async () => {
+      // Check if current orientation is landscape
+      const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+      
+      try {
+        const docElm = document.documentElement as any;
+        const isCurrentlyFullscreen = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+
+        if (isLandscape && !isCurrentlyFullscreen) {
+          // Request Fullscreen when landscape
+          if (docElm.requestFullscreen) {
+            await docElm.requestFullscreen();
+          } else if (docElm.webkitRequestFullscreen) { // Safari/iOS fallback
+            await docElm.webkitRequestFullscreen();
+          }
+        } else if (!isLandscape && isCurrentlyFullscreen) {
+          // Exit Fullscreen when portrait
+          if (document.exitFullscreen) {
+            await document.exitFullscreen();
+          } else if ((document as any).webkitExitFullscreen) { // Safari/iOS fallback
+            await (document as any).webkitExitFullscreen();
+          }
+        }
+      } catch (err) {
+        // This will likely log if the user hasn't interacted with the page yet
+        console.warn("Fullscreen transition failed. Browsers often require a user gesture first.", err);
+      }
+    };
+
+    // Listen for orientation changes using multiple methods for compatibility
+    window.addEventListener("orientationchange", handleOrientationChange);
+    
+    if (screen.orientation) {
+      screen.orientation.addEventListener("change", handleOrientationChange);
+    }
+
+    // Initial check in case the app loads in landscape
+    handleOrientationChange();
+
+    return () => {
+      window.removeEventListener("orientationchange", handleOrientationChange);
+      if (screen.orientation) {
+        screen.orientation.removeEventListener("change", handleOrientationChange);
+      }
+    };
+  }, []);
+  // -------------------------------------
+
   useEffect(() => {
     if (!targetPeerId) return;
 
@@ -27,7 +77,7 @@ const MobileController = () => {
 
       conn.on('data', (data: any) => {
         try {
-          const incomingData = JSON.parse(data); // Using 'incomingData' consistently
+          const incomingData = JSON.parse(data);
           
           if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
             const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
