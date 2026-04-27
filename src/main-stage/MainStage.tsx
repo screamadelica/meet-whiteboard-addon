@@ -4,20 +4,11 @@ import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
 import throttle from 'lodash.throttle';
-import "./whiteboard.css";
+import "../whiteboard.css";
 
 const PREFIX = "meetboard-xyz-";
 
-const MainStage = () => {
-  const themeOverrides = {
-    "--color-primary": "#d494aa",
-    "--color-primary-darker": "#d64c7e",
-    "--color-primary-darkest": "#e86e99",
-    "--color-primary-light": "#dcbec9",
-    "--default-bg-color": "#7cec13",
-    "--canvas-background-color": "#7cec13",
-  } as React.CSSProperties;
-  
+const MainStage = () => {  
   const [pin, setPin] = useState<string>('');
   const [isLobby, setIsLobby] = useState(true);
   const [activeConnections, setActiveConnections] = useState<DataConnection[]>([]);
