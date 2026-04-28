@@ -113,25 +113,28 @@ const MobileController = () => {
         </div>
       )}
 
-      <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md">
-        {status}
-      </div>      
       
-      <div className="h-full w-full">
-        <Excalidraw 
-          excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
-          onChange={onBoardChange}
-          UIOptions={{ 
-            welcomeScreen: false,
-            canvasActions: {
-              toggleTheme: false,
-              export: false,
-              loadScene: false,
-              changeViewBackgroundColor: false,
-            }
-          }}
-        />
-      </div>   
+      <div className="h-[100dvh] w-screen overflow-hidden flex flex-col">
+        <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md">
+          {status}
+        </div>      
+      
+        <div className="flex-grow w-full">
+          <Excalidraw 
+            excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
+            onChange={onBoardChange}
+            UIOptions={{ 
+              welcomeScreen: false,
+              canvasActions: {
+                toggleTheme: false,
+                export: false,
+                loadScene: false,
+                changeViewBackgroundColor: false,
+              }
+            }}
+          />
+        </div>
+      </div>  
     </div>
   );
 };
