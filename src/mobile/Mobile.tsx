@@ -21,20 +21,27 @@ const MobileController = () => {
     if (!containerRef.current) return;
 
     const el = containerRef.current as any;
-
+    setStatus("Requesting Fullscreen...");
+    
     // 1. Chrome / Standard API
-    if (el.requestFullscreen) {
-      el.requestFullscreen().catch(() => {});
-    } 
-    // 2. iOS Safari (Minimal UI Trick)
-    else {
-      document.documentElement.style.height = '110vh';
-      document.body.style.height = '110vh';
-      window.scrollTo(0, 1);
-      setTimeout(() => {
-        document.documentElement.style.height = '100dvh';
-        document.body.style.height = '100dvh';
-      }, 300);
+    try {
+      if (el.requestFullscreen) {
+        await el.requestFullscreen().catch(() => {});
+        setStatus("Fullscreen Success (Chrome)");
+      } 
+      // 2. iOS Safari (Minimal UI Trick)
+      else {
+        document.documentElement.style.height = '110vh';
+        document.body.style.height = '110vh';
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          document.documentElement.style.height = '100dvh';
+          document.body.style.height = '100dvh';
+        }, 300);
+        setStatus("Fullscreen Success (Safari API)");
+      }
+    } catch (err: any) {
+      setStatus(`Error: ${err.message || "Blocked by browser"}`);
     }
   };
 
