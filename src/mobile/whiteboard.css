@@ -1,7 +1,9 @@
 .whiteboard {
-  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #1e293b;
+  height: 100%;
+  margin: 0;
+  position: fixed;
+  width: 100%;
 
   /* Excalidraw theme variables
   --color-primary: #6366f1;
@@ -14,6 +16,7 @@
 /* Root Excalidraw container */
 .whiteboard .excalidraw {
   border-radius: 12px;
+  height: 100% !important;
 }
 
 /* Top toolbar background

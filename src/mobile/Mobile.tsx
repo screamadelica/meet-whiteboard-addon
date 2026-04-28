@@ -97,17 +97,17 @@ const MobileController = () => {
       connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements: updates, isDiff: true }));
     }
   }, 50), []);
-
-  return (
+return (
     <div 
       ref={containerRef} 
-      className="fixed inset-0 h-screen w-screen bg-white overflow-hidden touch-none"
+      /* Changed from fixed to absolute to allow the 'nudge' scroll to work */
+      className="absolute inset-0 h-[100dvh] w-screen bg-white overflow-hidden touch-none flex flex-col"
     >
       {!isStarted && (
         <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-gray-900 text-white">
           <button 
             onClick={enterFullscreen}
-            className="bg-blue-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl"
+            className="bg-blue-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl active:scale-95 transition-transform"
           >
             Go Fullscreen
           </button>
@@ -117,30 +117,27 @@ const MobileController = () => {
         </div>
       )}
 
+      {/* Floating Status */}
+      <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md pointer-events-none">
+        {status}
+      </div>      
       
-      <div className="h-[101dvh] w-screen overflow-y-scroll overflow-x-hidden snap-y snap-mandatory">
-        <div className="h-[100dvh] w-full snap-start relative">
-          <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md">
-            {status}
-          </div>      
-      
-          <div className="flex-grow w-full">
-            <Excalidraw 
-              excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
-              onChange={onBoardChange}
-              UIOptions={{ 
-                welcomeScreen: false,
-                canvasActions: {
-                  toggleTheme: false,
-                  export: false,
-                  loadScene: false,
-                  changeViewBackgroundColor: false,
-                }
-              }}
-            />
-          </div>
-        </div>  
-      </div>  
+      {/* Excalidraw Container: Needs absolute or fixed height to render */}
+      <div className="whiteboard h-full w-full overflow-hidden">
+        <Excalidraw 
+          excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
+          onChange={onBoardChange}
+          UIOptions={{ 
+            welcomeScreen: false,
+            canvasActions: {
+              toggleTheme: false,
+              export: false,
+              loadScene: false,
+              changeViewBackgroundColor: false,
+            }
+          }}
+        />
+      </div>
     </div>
   );
 };
