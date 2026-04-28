@@ -29,7 +29,14 @@ const MobileController = () => {
         await el.requestFullscreen();
       } else if (el.webkitRequestFullscreen) {
         // iOS Safari (Older versions/specific builds)
-        await el.webkitRequestFullscreen();
+        document.documentElement.style.height = '110vh';
+        document.body.style.height = '110vh';
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          document.documentElement.style.height = '100dvh';
+          document.body.style.height = '100dvh';
+        }, 300);    
+//        await el.webkitRequestFullscreen();
       }
     } catch (err) {
       console.warn("Fullscreen API blocked, falling back to scroll nudge", err);
