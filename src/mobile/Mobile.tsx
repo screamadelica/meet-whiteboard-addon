@@ -16,12 +16,34 @@ const MobileController = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
 
+  // Unified Fullscreen Handler
+  const enableFullscreen = async () => {
+    if (!containerRef.current) return;
+
+    const el = containerRef.current as any;
+
+    // 1. Chrome / Standard API
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => {});
+    } 
+    // 2. iOS Safari (Minimal UI Trick)
+    else {
+      document.documentElement.style.height = '110vh';
+      document.body.style.height = '110vh';
+      window.scrollTo(0, 1);
+      setTimeout(() => {
+        document.documentElement.style.height = '100dvh';
+        document.body.style.height = '100dvh';
+      }, 300);
+    }
+  };
+
+/*  
   useEffect(() => {
     const handleOrientationAndScroll = () => {
       const isLandscape = window.innerWidth > window.innerHeight;
 
       if (isLandscape) {
-        // 1. Temporarily increase height to allow scrolling
         document.documentElement.style.height = '110vh';
         document.body.style.height = '110vh';
 
@@ -48,6 +70,7 @@ const MobileController = () => {
       window.removeEventListener('resize', handleOrientationAndScroll);
     };
   }, []);
+*/
 
   useEffect(() => {
     if (!targetPeerId) return;
@@ -94,7 +117,9 @@ const MobileController = () => {
 
   return (
     <div 
-      ref={containerRef} 
+      ref={containerRef}
+      // We trigger fullscreen on the first touch/click inside the app
+      onPointerDown={enableFullscreen} 
       className="fixed inset-0 h-[100dvh] w-screen bg-white overflow-hidden touch-none flex flex-col"
     >
     
