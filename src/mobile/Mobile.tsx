@@ -34,25 +34,32 @@ const MobileController = () => {
 
   const toggleFullscreen = () => {
     if (!isFullscreen) {
-      // ENTER "FULLSCREEN" (Hide Safari Bars)
-      // 1. Ensure the body is tall enough to scroll
+      // ENTER "FULLSCREEN"
       document.documentElement.style.height = '110vh';
       document.body.style.height = '110vh';
       
-      // 2. Scroll down by 1px to trigger Safari's Minimal UI
+      // Nudge scroll to hide bars
       window.scrollTo(0, 1);
       
-      // 3. Lock it in (Wait for Safari to hide bars, then resize back)
       setTimeout(() => {
-        window.scrollTo(0, 1);
         setIsFullscreen(true);
       }, 300);
     } else {
-      // EXIT "FULLSCREEN" (Show Safari Bars)
-      document.documentElement.style.height = '100dvh';
-      document.body.style.height = '100dvh';
+      // EXIT "FULLSCREEN"
+      // 1. Reset the styles completely
+      document.documentElement.style.removeProperty('height');
+      document.body.style.removeProperty('height');
+      
+      // 2. Scroll back to the absolute top
       window.scrollTo(0, 0);
+      
+      // 3. Update state
       setIsFullscreen(false);
+      
+      // 4. Optional: Force a layout recount
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 100);
     }
   };
 
