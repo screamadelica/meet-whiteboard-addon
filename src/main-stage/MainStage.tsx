@@ -167,7 +167,7 @@ const MainStage = () => {
             excalidrawAPI={(api) => (excalidrawAPI.current = api)}
             onChange={(elements, appState) => {
               setIsDrawTool(appState.activeTool.type === "freedraw");
-              throttledBroadcast;
+              throttledBroadcast(elements);
             }}
             renderTopRightUI={() =>
               isDrawTool ? (

@@ -85,8 +85,8 @@ const MobileController = () => {
             isRemoteUpdate.current = true;
             excalidrawAPI.current.updateScene({ elements: nextElements });
             nextElements.forEach((el) => versionMap.current.set(el.id, el.version));
-            setTimeout(() => { isRemoteUpdate.current = false; }, 100);
           }
+          setTimeout(() => { isRemoteUpdate.current = false; }, 100);
         } catch (e) { console.error("Mobile parse error", e); }
       });
     });
