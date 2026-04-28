@@ -24,18 +24,20 @@ const MobileController = () => {
     const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
     setStatus("Requesting Fullscreen...");
     try {
-      await el.requestFullscreen().catch(() => {});
+      await el.requestFullscreen();
       setStatus("Fullscreen Standard API");
     } catch (err: any) {
       setStatus(`Error: ${err.message || "Standard API blocked by browser"}`);
     }
-
+/*
     try {
       await el.webkitRequestFullscreen();
       setStatus("Fullscreen: Webkit API");
     } catch (err: any) {
       setStatus(`Error: ${err.message || "Webkit API blocked by browser"}`);
     }
+*/
+      
 /*
     // 1. Chrome / Standard API
     try {
