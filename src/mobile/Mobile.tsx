@@ -36,7 +36,7 @@ const MobileController = () => {
     } catch (err: any) {
       setStatus(`Error: ${err.message || "Webkit API blocked by browser"}`);
     }
-
+/*
     // 1. Chrome / Standard API
     try {
       if (isChrome) {
@@ -60,6 +60,7 @@ const MobileController = () => {
     } catch (err: any) {
       setStatus(`Error: ${err.message || "Blocked by browser"}`);
     }
+*/      
   };
 
 /*  
