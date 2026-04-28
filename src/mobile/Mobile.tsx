@@ -50,6 +50,9 @@ const MobileController = () => {
       document.documentElement.style.removeProperty('height');
       document.body.style.removeProperty('height');
       
+      document.body.scrollTop = 0;
+      document.documentElement.scrollTop = 0;
+      
       // 2. Scroll back to the absolute top
       window.scrollTo(0, 0);
       
