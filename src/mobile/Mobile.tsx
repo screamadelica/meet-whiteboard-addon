@@ -27,10 +27,13 @@ const MobileController = () => {
     try {
       if (el.requestFullscreen) {
         await el.requestFullscreen().catch(() => {});
-        setStatus("Fullscreen Success (Chrome)");
-      } 
+        setStatus("Fullscreen Standard API");
+      } else if (el.webkitRequestFullscreen) {
+        // Chrome Mobile / Older Safari
+        await el.webkitRequestFullscreen();
+        setStatus("Fullscreen: Webkit API");
       // 2. iOS Safari (Minimal UI Trick)
-      else {
+      } else {
         document.documentElement.style.height = '110vh';
         document.body.style.height = '110vh';
         window.scrollTo(0, 1);
