@@ -7,7 +7,6 @@ import "./whiteboard.css";
 
 const MobileController = () => {
   const [status, setStatus] = useState("Connecting...");
-  const [isLocked, setIsLocked] = useState(false); // Tracks if we've attempted fullscreen
   const containerRef = useRef<HTMLDivElement>(null);
   const excalidrawAPI = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
@@ -17,42 +16,6 @@ const MobileController = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
 
-  // Unified Fullscreen Function for Chrome & Safari
-  const handleInitialInteraction = async () => {
-    if (isLocked || !containerRef.current) return;
-    
-    const el = containerRef.current as any;
-
-    try {
-      if (el.requestFullscreen) {
-        // Chrome / Android Standard
-        await el.requestFullscreen();
-      } else if (el.webkitRequestFullscreen) {
-        // iOS Safari (Older versions/specific builds)
-        document.documentElement.style.height = '110vh';
-        document.body.style.height = '110vh';
-        window.scrollTo(0, 1);
-        setTimeout(() => {
-          document.documentElement.style.height = '100dvh';
-          document.body.style.height = '100dvh';
-        }, 300);    
-//        await el.webkitRequestFullscreen();
-      }
-    } catch (err) {
-      console.warn("Fullscreen API blocked, falling back to scroll nudge", err);
-      document.documentElement.style.height = '110vh';
-      document.body.style.height = '110vh';
-      window.scrollTo(0, 1);
-      setTimeout(() => {
-        document.documentElement.style.height = '100dvh';
-        document.body.style.height = '100dvh';
-      }, 300);    
-    }
-
-    setIsLocked(true);
-  };
-
-/*  
   // Unified Fullscreen Handler
   const enableFullscreen = async () => {
     if (!containerRef.current) return;
@@ -74,7 +37,6 @@ const MobileController = () => {
       }, 300);
     }
   };
-*/
 
 /*  
   useEffect(() => {
@@ -157,20 +119,10 @@ const MobileController = () => {
     <div 
       ref={containerRef}
       // We trigger fullscreen on the first touch/click inside the app
+      onPointerDown={enableFullscreen} 
       className="fixed inset-0 h-[100dvh] w-screen bg-white overflow-hidden touch-none flex flex-col"
     >
-      {!isLocked && (
-        <div 
-          onPointerDown={handleInitialInteraction}
-          className="absolute inset-0 z-[9999] bg-black/10 flex items-center justify-center backdrop-blur-[2px]"
-        >
-          <div className="bg-white p-4 rounded-lg shadow-xl text-center">
-            <p className="font-bold text-gray-800">Tap to Start</p>
-            <p className="text-xs text-gray-500">This enables full screen mode</p>
-          </div>
-        </div>
-      )}
-
+    
       {/* Status Badge */}
       <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md pointer-events-none">
         {status}
