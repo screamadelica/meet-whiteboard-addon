@@ -21,11 +21,12 @@ const MobileController = () => {
     if (!containerRef.current) return;
 
     const el = containerRef.current as any;
+    const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
     setStatus("Requesting Fullscreen...");
     
     // 1. Chrome / Standard API
     try {
-      if (el.requestFullscreen) {
+      if (isChrome) {
         await el.requestFullscreen().catch(() => {});
         setStatus("Fullscreen Standard API");
       } else if (el.webkitRequestFullscreen) {
