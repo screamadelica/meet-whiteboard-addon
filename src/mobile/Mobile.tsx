@@ -32,6 +32,31 @@ const MobileController = () => {
     };
   }, []);
 
+  const toggleFullscreen = () => {
+    if (!isFullscreen) {
+      // ENTER "FULLSCREEN" (Hide Safari Bars)
+      // 1. Ensure the body is tall enough to scroll
+      document.documentElement.style.height = '110vh';
+      document.body.style.height = '110vh';
+      
+      // 2. Scroll down by 1px to trigger Safari's Minimal UI
+      window.scrollTo(0, 1);
+      
+      // 3. Lock it in (Wait for Safari to hide bars, then resize back)
+      setTimeout(() => {
+        window.scrollTo(0, 1);
+        setIsFullscreen(true);
+      }, 300);
+    } else {
+      // EXIT "FULLSCREEN" (Show Safari Bars)
+      document.documentElement.style.height = '100dvh';
+      document.body.style.height = '100dvh';
+      window.scrollTo(0, 0);
+      setIsFullscreen(false);
+    }
+  };
+
+/*  
   const toggleFullscreen = async () => {
     if (!containerRef.current) return;
 
@@ -58,6 +83,7 @@ const MobileController = () => {
       console.error("Fullscreen toggle failed", err);
     }
   };
+*/
 
   useEffect(() => {
     if (!targetPeerId) return;
@@ -105,8 +131,13 @@ const MobileController = () => {
   return (
     <div 
       ref={containerRef} 
-      className="absolute inset-0 h-[100dvh] w-screen bg-white overflow-hidden touch-none flex flex-col"
+      className={`w-screen bg-white flex flex-col transition-all duration-300 ${
+        isFullscreen 
+          ? "h-[100dvh] fixed top-0 left-0 z-[9999]" 
+          : "h-[100dvh] relative"
+      }}
     >
+      
       {/* Status Badge */}
       <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md pointer-events-none">
         {status}
