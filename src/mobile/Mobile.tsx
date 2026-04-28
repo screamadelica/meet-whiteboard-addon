@@ -45,6 +45,10 @@ const MobileController = () => {
     const handleResize = () => {
       if (isStarted && window.innerWidth > window.innerHeight) {
         enterFullscreen();
+        setTimeout(() => {
+          // Scrolling to 0,1 or 0,0 often triggers the UI collapse
+          window.scrollTo(0, 1);
+        }, 500); // 500ms delay helps Safari "settle" first
       }
     };
     window.addEventListener("resize", handleResize);
@@ -114,26 +118,28 @@ const MobileController = () => {
       )}
 
       
-      <div className="h-[100dvh] w-screen overflow-hidden flex flex-col">
-        <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md">
-          {status}
-        </div>      
+      <div className="h-[101dvh] w-screen overflow-y-scroll overflow-x-hidden snap-y snap-mandatory">
+        <div className="h-[100dvh] w-full snap-start relative">
+          <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md">
+            {status}
+          </div>      
       
-        <div className="flex-grow w-full">
-          <Excalidraw 
-            excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
-            onChange={onBoardChange}
-            UIOptions={{ 
-              welcomeScreen: false,
-              canvasActions: {
-                toggleTheme: false,
-                export: false,
-                loadScene: false,
-                changeViewBackgroundColor: false,
-              }
-            }}
-          />
-        </div>
+          <div className="flex-grow w-full">
+            <Excalidraw 
+              excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
+              onChange={onBoardChange}
+              UIOptions={{ 
+                welcomeScreen: false,
+                canvasActions: {
+                  toggleTheme: false,
+                  export: false,
+                  loadScene: false,
+                  changeViewBackgroundColor: false,
+                }
+              }}
+            />
+          </div>
+        </div>  
       </div>  
     </div>
   );
