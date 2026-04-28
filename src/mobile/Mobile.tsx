@@ -7,7 +7,6 @@ import "./whiteboard.css";
 
 const MobileController = () => {
   const [status, setStatus] = useState("Connecting...");
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const excalidrawAPI = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
@@ -17,83 +16,38 @@ const MobileController = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
 
-  // Listen for browser-level fullscreen changes (e.g., user pressing ESC or swiping away)
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement || !!(document as any).webkitFullscreenElement);
+    const handleOrientationAndScroll = () => {
+      const isLandscape = window.innerWidth > window.innerHeight;
+
+      if (isLandscape) {
+        // 1. Temporarily increase height to allow scrolling
+        document.documentElement.style.height = '110vh';
+        document.body.style.height = '110vh';
+
+        // 2. Small delay to let Safari stabilize, then nudge scroll
+        setTimeout(() => {
+          window.scrollTo(0, 1);
+          // 3. Reset height to fill the new "larger" viewport
+          document.documentElement.style.height = '100dvh';
+          document.body.style.height = '100dvh';
+        }, 300);
+      } else {
+        // Reset for portrait
+        document.documentElement.style.height = '100dvh';
+        document.body.style.height = '100dvh';
+        window.scrollTo(0, 0);
+      }
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    window.addEventListener('orientationchange', handleOrientationAndScroll);
+    window.addEventListener('resize', handleOrientationAndScroll);
     
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      window.removeEventListener('orientationchange', handleOrientationAndScroll);
+      window.removeEventListener('resize', handleOrientationAndScroll);
     };
   }, []);
-
-  const toggleFullscreen = () => {
-    if (!isFullscreen) {
-      // ENTER "FULLSCREEN"
-      document.documentElement.style.height = '110vh';
-      document.body.style.height = '110vh';
-      
-      // Nudge scroll to hide bars
-      window.scrollTo(0, 1);
-      
-      setTimeout(() => {
-        setIsFullscreen(true);
-      }, 300);
-    } else {
-      // EXIT "FULLSCREEN"
-      // 1. Reset the styles completely
-      document.documentElement.style.removeProperty('height');
-      document.body.style.removeProperty('height');
-      
-      document.body.scrollTop = 0;
-      document.documentElement.scrollTop = 0;
-      
-      // 2. Scroll back to the absolute top
-      window.scrollTo(0, 0);
-      
-      // 3. Update state
-      setIsFullscreen(false);
-      
-      // 4. Optional: Force a layout recount
-      setTimeout(() => {
-        window.dispatchEvent(new Event('resize'));
-      }, 100);
-    }
-  };
-
-/*  
-  const toggleFullscreen = async () => {
-    if (!containerRef.current) return;
-
-    try {
-      const el = containerRef.current as any;
-      
-      if (!isFullscreen) {
-        // ENTER Fullscreen
-        if (el.requestFullscreen) {
-          await el.requestFullscreen();
-        } else if (el.webkitRequestFullscreen) {
-          await el.webkitRequestFullscreen();
-        }
-        window.scrollTo(0, 1);
-      } else {
-        // EXIT Fullscreen
-        if (document.exitFullscreen) {
-          await document.exitFullscreen();
-        } else if ((document as any).webkitExitFullscreen) {
-          await (document as any).webkitExitFullscreen();
-        }
-      }
-    } catch (err) {
-      console.error("Fullscreen toggle failed", err);
-    }
-  };
-*/
 
   useEffect(() => {
     if (!targetPeerId) return;
@@ -141,29 +95,13 @@ const MobileController = () => {
   return (
     <div 
       ref={containerRef} 
-      className={`w-screen bg-white flex flex-col ${
-        isFullscreen 
-          ? "h-[100dvh] fixed top-0 left-0 z-[9999] overflow-hidden" 
-          : "h-screen relative overflow-auto" // overflow-auto allows the browser to 'see' the top again
-      }`}
-    >    
+      className="fixed inset-0 h-[100dvh] w-screen bg-white overflow-hidden touch-none flex flex-col"
+    >
+    
       {/* Status Badge */}
       <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md pointer-events-none">
         {status}
       </div>      
-
-      {/* NEW: Toggle Fullscreen Button */}
-      <button 
-        onClick={toggleFullscreen}
-        className="absolute right-4 bottom-24 z-50 p-3 rounded-full bg-blue-600 text-white shadow-lg active:scale-90 transition-transform flex items-center justify-center"
-        aria-label="Toggle Fullscreen"
-      >
-        {isFullscreen ? (
-          <span className="text-xs font-bold px-1">EXIT</span>
-        ) : (
-          <span className="text-xs font-bold px-1">FULLSCREEN</span>
-        )}
-      </button>
       
       {/* Excalidraw Container */}
       <div className="whiteboard h-full w-full overflow-hidden">
