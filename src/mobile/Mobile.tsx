@@ -7,7 +7,7 @@ import "./whiteboard.css";
 
 const MobileController = () => {
   const [status, setStatus] = useState("Connecting...");
-  const [isStarted, setIsStarted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const excalidrawAPI = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
@@ -17,43 +17,47 @@ const MobileController = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
 
-  const enterFullscreen = async () => {
+  // Listen for browser-level fullscreen changes (e.g., user pressing ESC or swiping away)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement || !!(document as any).webkitFullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = async () => {
     if (!containerRef.current) return;
 
     try {
       const el = containerRef.current as any;
       
-      // Standard Fullscreen API
-      if (el.requestFullscreen) {
-        await el.requestFullscreen();
-      } else if (el.webkitRequestFullscreen) {
-        // Essential for iOS Safari
-        await el.webkitRequestFullscreen();
+      if (!isFullscreen) {
+        // ENTER Fullscreen
+        if (el.requestFullscreen) {
+          await el.requestFullscreen();
+        } else if (el.webkitRequestFullscreen) {
+          await el.webkitRequestFullscreen();
+        }
+        window.scrollTo(0, 1);
+      } else {
+        // EXIT Fullscreen
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        }
       }
-
-      // Nudge the browser to hide the URL bar
-      window.scrollTo(0, 1);
     } catch (err) {
-      console.error("Fullscreen failed", err);
-    } finally {
-      setIsStarted(true);
+      console.error("Fullscreen toggle failed", err);
     }
   };
-
-  // Auto-trigger fullscreen on rotation if already "started"
-  useEffect(() => {
-    const handleResize = () => {
-      if (isStarted && window.innerWidth > window.innerHeight) {
-        enterFullscreen();
-        setTimeout(() => {
-          // Scrolling to 0,1 or 0,0 often triggers the UI collapse
-          window.scrollTo(0, 1);
-        }, 500); // 500ms delay helps Safari "settle" first
-      }
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [isStarted]);
 
   useEffect(() => {
     if (!targetPeerId) return;
@@ -97,32 +101,31 @@ const MobileController = () => {
       connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements: updates, isDiff: true }));
     }
   }, 50), []);
-return (
+
+  return (
     <div 
       ref={containerRef} 
-      /* Changed from fixed to absolute to allow the 'nudge' scroll to work */
       className="absolute inset-0 h-[100dvh] w-screen bg-white overflow-hidden touch-none flex flex-col"
     >
-      {!isStarted && (
-        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-gray-900 text-white">
-          <button 
-            onClick={enterFullscreen}
-            className="bg-blue-600 px-8 py-4 rounded-xl font-bold text-lg shadow-2xl active:scale-95 transition-transform"
-          >
-            Go Fullscreen
-          </button>
-          <p className="mt-4 text-sm opacity-70 text-center px-6">
-            Tap to hide browser bars and start drawing
-          </p>
-        </div>
-      )}
-
-      {/* Floating Status */}
+      {/* Status Badge */}
       <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md pointer-events-none">
         {status}
       </div>      
+
+      {/* NEW: Toggle Fullscreen Button */}
+      <button 
+        onClick={toggleFullscreen}
+        className="absolute right-4 bottom-24 z-50 p-3 rounded-full bg-blue-600 text-white shadow-lg active:scale-90 transition-transform flex items-center justify-center"
+        aria-label="Toggle Fullscreen"
+      >
+        {isFullscreen ? (
+          <span className="text-xs font-bold px-1">EXIT</span>
+        ) : (
+          <span className="text-xs font-bold px-1">FULLSCREEN</span>
+        )}
+      </button>
       
-      {/* Excalidraw Container: Needs absolute or fixed height to render */}
+      {/* Excalidraw Container */}
       <div className="whiteboard h-full w-full overflow-hidden">
         <Excalidraw 
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
