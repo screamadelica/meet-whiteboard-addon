@@ -135,9 +135,9 @@ const MobileController = () => {
         isFullscreen 
           ? "h-[100dvh] fixed top-0 left-0 z-[9999]" 
           : "h-[100dvh] relative"
-      }}
+      }`}
     >
-      
+    
       {/* Status Badge */}
       <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md pointer-events-none">
         {status}
