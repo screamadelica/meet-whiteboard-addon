@@ -9,6 +9,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      workbox: {
+        maximumFileSizeToCacheInBytes: 3000000, 
+      },
       manifest: {
         display: 'fullscreen', // This is what hides the Chrome URL bar
         orientation: 'landscape',
