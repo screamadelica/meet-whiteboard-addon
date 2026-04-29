@@ -2,11 +2,20 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
+import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   plugins: [
     react(),
-    tailwindcss()
+    tailwindcss(),
+    VitePWA({
+      manifest: {
+        display: 'fullscreen', // This is what hides the Chrome URL bar
+        orientation: 'landscape',
+        theme_color: '#ffffff',
+        // ... other manifest settings
+      }
+    })
   ],
   define: {
     "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV),
