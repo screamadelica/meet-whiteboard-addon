@@ -1,74 +1,46 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
+import { FullScreen, useFullScreenHandle } from "react-full-screen"; //
 import Peer, { DataConnection } from 'peerjs';
 import throttle from 'lodash.throttle';
 import "./whiteboard.css";
 
 const MobileController = () => {
   const [status, setStatus] = useState("Connecting...");
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [isStarted, setIsStarted] = useState(false); //
   const excalidrawAPI = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
   const versionMap = useRef(new Map<string, number>());
   const connectionRef = useRef<DataConnection | null>(null);
 
+  // Initialize Fullscreen handle
+  const handle = useFullScreenHandle();
+
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
 
-  const enableFullscreen = async () => {
-    if (!containerRef.current) return;
+  // Unified Start Handler for Fullscreen
+  const handleStart = useCallback(() => {
+    // 1. Enter Fullscreen mode via the library
+    handle.enter().catch((err) => {
+      console.warn("Fullscreen API failed, falling back to Safari nudge", err);
+    });
 
-    const el = containerRef.current as any;
-    setStatus("Requesting Fullscreen...");
-    
-    try {
-        document.documentElement.style.height = '110vh';
-        document.body.style.height = '110vh';
-        window.scrollTo(0, 1);
-        setTimeout(() => {
-          document.documentElement.style.height = '100dvh';
-          document.body.style.height = '100dvh';
-        }, 300);
-        setStatus("Fullscreen Success (Safari API)");
-      } catch (err: any) {
-      setStatus(`Error: ${err.message || "Full screen blocked by browser"}`);
-    }
-  };
-
-/*  
-  useEffect(() => {
-    const handleOrientationAndScroll = () => {
-      const isLandscape = window.innerWidth > window.innerHeight;
-
-      if (isLandscape) {
-        document.documentElement.style.height = '110vh';
-        document.body.style.height = '110vh';
-
-        // 2. Small delay to let Safari stabilize, then nudge scroll
-        setTimeout(() => {
-          window.scrollTo(0, 1);
-          // 3. Reset height to fill the new "larger" viewport
-          document.documentElement.style.height = '100dvh';
-          document.body.style.height = '100dvh';
-        }, 300);
-      } else {
-        // Reset for portrait
+    // 2. iOS Safari Minimal-UI nudge fallback
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      document.documentElement.style.height = '110vh';
+      document.body.style.height = '110vh';
+      window.scrollTo(0, 1);
+      setTimeout(() => {
         document.documentElement.style.height = '100dvh';
         document.body.style.height = '100dvh';
-        window.scrollTo(0, 0);
-      }
-    };
+      }, 300);
+    }
 
-    window.addEventListener('orientationchange', handleOrientationAndScroll);
-    window.addEventListener('resize', handleOrientationAndScroll);
-    
-    return () => {
-      window.removeEventListener('orientationchange', handleOrientationAndScroll);
-      window.removeEventListener('resize', handleOrientationAndScroll);
-    };
-  }, []);
-*/
+    setIsStarted(true);
+    setStatus("Fullscreen Active");
+  }, [handle]);
 
   useEffect(() => {
     if (!targetPeerId) return;
@@ -114,35 +86,47 @@ const MobileController = () => {
   }, 50), []);
 
   return (
-    <div 
-      ref={containerRef}
-      // We trigger fullscreen on the first touch/click inside the app
-      onPointerDown={enableFullscreen} 
-      className="fixed inset-0 h-[100dvh] w-screen bg-white overflow-hidden touch-none flex flex-col"
-    >
-    
-      {/* Status Badge */}
-      <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md pointer-events-none">
-        {status}
-      </div>      
-      
-      {/* Excalidraw Container */}
-      <div className="whiteboard h-full w-full overflow-hidden">
-        <Excalidraw 
-          excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
-          onChange={onBoardChange}
-          UIOptions={{ 
-            welcomeScreen: false,
-            canvasActions: {
-              toggleTheme: false,
-              export: false,
-              loadScene: false,
-              changeViewBackgroundColor: false,
-            }
-          }}
-        />
+    <FullScreen handle={handle}>
+      <div className="relative h-[100dvh] w-screen bg-white overflow-hidden touch-none flex flex-col">
+        
+        {/* Launch Overlay */}
+        {!isStarted && (
+          <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-gray-900/90 text-white backdrop-blur-sm">
+            <button 
+              onClick={handleStart}
+              className="bg-blue-600 px-10 py-5 rounded-2xl font-bold text-xl shadow-2xl active:scale-95 transition-transform"
+            >
+              Start Drawing
+            </button>
+            <p className="mt-4 text-sm opacity-70 text-center px-6">
+              Tap to enable full screen mode
+            </p>
+          </div>
+        )}
+
+        {/* Status Badge */}
+        <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md pointer-events-none">
+          {status}
+        </div>      
+        
+        {/* Excalidraw Container */}
+        <div className="whiteboard h-full w-full overflow-hidden">
+          <Excalidraw 
+            excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
+            onChange={onBoardChange}
+            UIOptions={{ 
+              welcomeScreen: false,
+              canvasActions: {
+                toggleTheme: false,
+                export: false,
+                loadScene: false,
+                changeViewBackgroundColor: false,
+              }
+            }}
+          />
+        </div>
       </div>
-    </div>
+    </FullScreen>
   );
 };
 
