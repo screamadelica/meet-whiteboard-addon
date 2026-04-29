@@ -7,18 +7,22 @@ const SidePanel = () => {
   const [prefix, setPrefix] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const initMeet = async () => {
       try {
-        // Initialize session using the imported 'meet' object
         const session = await meet.addon.createAddonSession({
-//          cloudProjectNumber: "547958960288" 
-          cloudProjectNumber: "109641982239" 
-          
+          cloudProjectNumber: "109641982239"           
         });
         
-        const sidePanelClient = await session.createSidePanelClient();
-        setClient(sidePanelClient);
+        if (cancelled) return;
 
+        const sidePanelClient = await session.createSidePanelClient();
+        
+        if (cancelled) return;
+
+        setClient(sidePanelClient);
+/*
         sidePanelClient.on('frameToFrameMessage', (arg) => {
           const receivedMessage = JSON.parse(arg.payload);
           if (receivedMessage.action === 'pin') {
@@ -26,13 +30,18 @@ const SidePanel = () => {
             setPrefix(receivedMessage.prefix);
           }
         });
-
+*/
       } catch (error) {
         console.error("SDK Initialization FAILED:", error);
       }
     };
 
     initMeet();
+
+    return () => {
+      cancelled = true; // cleanup on unmount/remount
+    };
+
   }, []);
 
   const handleLaunch = async () => {
