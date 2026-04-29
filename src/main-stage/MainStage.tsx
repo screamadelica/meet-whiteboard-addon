@@ -34,7 +34,11 @@ const MainStage = () => {
   useEffect(() => {
     const initMeet = async () => {
       try {
-        const session = await meet.addon.createAddonSession({ cloudProjectNumber: "547958960288" });
+        const session = await meet.addon.createAddonSession({ 
+//          cloudProjectNumber: "547958960288"
+          cloudProjectNumber: "109641982239" 
+
+        });
         mainStageClient.current = await session.createMainStageClient();
       } catch (e) {
         console.error("Meet SDK Handshake Failed:", e);

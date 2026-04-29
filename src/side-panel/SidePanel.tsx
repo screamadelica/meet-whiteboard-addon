@@ -11,7 +11,9 @@ const SidePanel = () => {
       try {
         // Initialize session using the imported 'meet' object
         const session = await meet.addon.createAddonSession({
-          cloudProjectNumber: "547958960288" 
+//          cloudProjectNumber: "547958960288" 
+          cloudProjectNumber: "109641982239" 
+          
         });
         
         const sidePanelClient = await session.createSidePanelClient();
