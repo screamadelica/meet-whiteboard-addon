@@ -16,48 +16,13 @@ const MobileController = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
 
-  // Unified Fullscreen Handler
   const enableFullscreen = async () => {
     if (!containerRef.current) return;
 
     const el = containerRef.current as any;
-
-    // Find the available fullscreen method
-    const requestMethod = 
-      el.requestFullscreen || 
-      el.webkitRequestFullscreen || 
-      el.webkitRequestFullScreen || 
-      el.mozRequestFullScreen || 
-      el.msRequestFullscreen;
-    
     setStatus("Requesting Fullscreen...");
+    
     try {
-      await requestMethod.call(el);
-      setStatus("Fullscreen Standard API");
-    } catch (err: any) {
-      setStatus(`Error: ${err.message || "Standard API blocked by browser"}`);
-    }
-/*
-    try {
-      await el.webkitRequestFullscreen();
-      setStatus("Fullscreen: Webkit API");
-    } catch (err: any) {
-      setStatus(`Error: ${err.message || "Webkit API blocked by browser"}`);
-    }
-*/
-
-/*
-    // 1. Chrome / Standard API
-    try {
-      if (isChrome) {
-        await el.requestFullscreen().catch(() => {});
-        setStatus("Fullscreen Standard API");
-      } else if (el.webkitRequestFullscreen) {
-        // Chrome Mobile / Older Safari
-        await el.webkitRequestFullscreen();
-        setStatus("Fullscreen: Webkit API");
-      // 2. iOS Safari (Minimal UI Trick)
-      } else {
         document.documentElement.style.height = '110vh';
         document.body.style.height = '110vh';
         window.scrollTo(0, 1);
@@ -66,11 +31,9 @@ const MobileController = () => {
           document.body.style.height = '100dvh';
         }, 300);
         setStatus("Fullscreen Success (Safari API)");
-      }
-    } catch (err: any) {
-      setStatus(`Error: ${err.message || "Blocked by browser"}`);
+      } catch (err: any) {
+      setStatus(`Error: ${err.message || "Full screen blocked by browser"}`);
     }
-*/      
   };
 
 /*  
