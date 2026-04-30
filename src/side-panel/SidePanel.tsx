@@ -22,7 +22,7 @@ const SidePanel = () => {
         if (cancelled) return;
 
         setClient(sidePanelClient);
-/*
+
         sidePanelClient.on('frameToFrameMessage', (arg) => {
           const receivedMessage = JSON.parse(arg.payload);
           if (receivedMessage.action === 'pin') {
@@ -30,7 +30,7 @@ const SidePanel = () => {
             setPrefix(receivedMessage.prefix);
           }
         });
-*/
+
       } catch (error) {
         console.error("SDK Initialization FAILED:", error);
       }
