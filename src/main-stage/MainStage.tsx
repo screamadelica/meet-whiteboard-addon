@@ -170,6 +170,7 @@ const MainStage = () => {
     try {
       const iceResponse = await fetch('/api/get-ice-servers');
       const iceData = await iceResponse.json();
+      console.log('iceData', iceData)
       iceServers = iceData.config?.iceServers || [];
     } catch (e) {
       console.warn('[MainStage] Could not fetch ICE servers, falling back to defaults:', e);
@@ -180,6 +181,8 @@ const MainStage = () => {
       config: { iceServers }
     });
     peerInstance.current = peer;
+
+    console.log('peer created')
 
     peer.on('open', async (id) => {
       console.log('[MainStage] ✓ Peer open with ID:', id);
