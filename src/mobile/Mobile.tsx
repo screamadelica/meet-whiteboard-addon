@@ -26,6 +26,12 @@ const MobileController = () => {
 
   const handleStart = useCallback(() => {
     setIsStarted(true);
+    
+    // Add a tiny haptic pulse to make the button feel responsive on mobile
+    if (window.navigator.vibrate) {
+      window.navigator.vibrate(10);
+    }
+
     const el = containerRef.current || document.documentElement;
     if (el.requestFullscreen) {
       el.requestFullscreen().catch(() => {});
@@ -124,7 +130,12 @@ const MobileController = () => {
     const initPeer = async () => {
       try {
         console.log('[Mobile] Fetching ICE servers...');
-        const iceResponse = await fetch('/api/get-ice-servers');
+        const iceResponse = await fetch('/api/get-ice-servers').catch(() => null);
+        
+        if (!iceResponse || !iceResponse.ok) {
+          throw new Error("Failed to fetch ICE config");
+        }
+
         const iceData = await iceResponse.json();
         const iceServers = iceData.config?.iceServers || [];
 

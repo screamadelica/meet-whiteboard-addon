@@ -166,9 +166,15 @@ const MainStage = () => {
     console.log('[MainStage] Creating peer with ID:', peerId);
     console.log('[MainStage] SDK ready at this moment?', !!mainStageClient.current);
 
-    const iceResponse = await fetch('/api/get-ice-servers');
-    const iceData = await iceResponse.json();
-    const iceServers = iceData.config?.iceServers || [];
+    let iceServers = [];
+    try {
+      const iceResponse = await fetch('/api/get-ice-servers');
+      const iceData = await iceResponse.json();
+      iceServers = iceData.config?.iceServers || [];
+    } catch (e) {
+      console.warn('[MainStage] Could not fetch ICE servers, falling back to defaults:', e);
+      iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+    }
 
     const peer = new Peer(peerId, {
       config: { iceServers }
