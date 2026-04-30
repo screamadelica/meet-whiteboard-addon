@@ -121,29 +121,43 @@ const MobileController = () => {
       return;
     }
 
-    console.log('[Mobile] Initialising PeerJS...');
-    const peer = new Peer();
-    peerRef.current = peer;
+    const initPeer = async () => {
+      try {
+        console.log('[Mobile] Fetching ICE servers...');
+        const iceResponse = await fetch('/api/get-ice-servers');
+        const iceData = await iceResponse.json();
+        const iceServers = iceData.config?.iceServers || [];
 
-    peer.on('open', (myId) => {
-      console.log('[Mobile] ✓ My peer ID assigned:', myId);
-      console.log('[Mobile] Now connecting to MainStage peer:', targetPeerId);
-      connectToPeer(peer, targetPeerId);
-    });
+        console.log('[Mobile] Initialising PeerJS with config...');
+        const peer = new Peer({ config: { iceServers } });
+        peerRef.current = peer;
 
-    peer.on('error', (err) => {
-      console.error('[Mobile] Peer-level error:', err.type, err);
-      setStatus(`❌ Peer error: ${err.type}`);
-    });
+        peer.on('open', (myId) => {
+          console.log('[Mobile] ✓ My peer ID assigned:', myId);
+          console.log('[Mobile] Now connecting to MainStage peer:', targetPeerId);
+          connectToPeer(peer, targetPeerId);
+        });
 
-    peer.on('disconnected', () => {
-      console.warn('[Mobile] Peer disconnected from broker, attempting reconnect...');
-      peer.reconnect();
-    });
+        peer.on('error', (err) => {
+          console.error('[Mobile] Peer-level error:', err.type, err);
+          setStatus(`❌ Peer error: ${err.type}`);
+        });
+
+        peer.on('disconnected', () => {
+          console.warn('[Mobile] Peer disconnected from broker, attempting reconnect...');
+          peer.reconnect();
+        });
+      } catch (e) {
+        console.error('[Mobile] Initialization failed:', e);
+        setStatus("❌ Initialization failed");
+      }
+    };
+
+    initPeer();
 
     return () => {
       console.log('[Mobile] Cleaning up peer');
-      peer.destroy();
+      peerRef.current?.destroy();
     };
   }, [targetPeerId, connectToPeer]);
 
@@ -177,7 +191,7 @@ const MobileController = () => {
               touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent', userSelect: 'none',
             }}
           >
-            Start Drawing!
+            Start Drawing 1!
           </button>
           <p style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.6)', textAlign: 'center', padding: '0 24px' }}>
             Tap to enable full screen mode

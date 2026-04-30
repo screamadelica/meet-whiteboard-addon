@@ -166,7 +166,13 @@ const MainStage = () => {
     console.log('[MainStage] Creating peer with ID:', peerId);
     console.log('[MainStage] SDK ready at this moment?', !!mainStageClient.current);
 
-    const peer = new Peer(peerId);
+    const iceResponse = await fetch('/api/get-ice-servers');
+    const iceData = await iceResponse.json();
+    const iceServers = iceData.config?.iceServers || [];
+
+    const peer = new Peer(peerId, {
+      config: { iceServers }
+    });
     peerInstance.current = peer;
 
     peer.on('open', async (id) => {
