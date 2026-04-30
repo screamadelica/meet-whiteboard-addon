@@ -10,13 +10,21 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       workbox: {
-        maximumFileSizeToCacheInBytes: 3000000, 
+        maximumFileSizeToCacheInBytes: 3000000,
+        navigateFallbackDenylist: [/\/side-panel\.html/, /\/main-stage\.html/],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => 
+              url.pathname.includes('side-panel') ||
+              url.pathname.includes('main-stage'),
+            handler: 'NetworkOnly',
+          }
+        ]   
       },
       manifest: {
         display: 'fullscreen', // This is what hides the Chrome URL bar
         orientation: 'landscape',
         theme_color: '#ffffff',
-        // ... other manifest settings
       }
     })
   ],
