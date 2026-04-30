@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
-import { FullScreen, useFullScreenHandle } from "react-full-screen";
 import Peer, { DataConnection } from 'peerjs';
 import throttle from 'lodash.throttle';
 import "./whiteboard.css";
@@ -13,22 +12,23 @@ const MobileController = () => {
   const isRemoteUpdate = useRef(false);
   const versionMap = useRef(new Map<string, number>());
   const connectionRef = useRef<DataConnection | null>(null);
-
-  const handle = useFullScreenHandle();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
 
   const handleStart = useCallback(() => {
-    // ✅ FIX 1: Set isStarted immediately — don't wait for async fullscreen
     setIsStarted(true);
 
-    // ✅ FIX 2: Fullscreen in its own isolated try/catch
-    handle.enter().catch((err) => {
-      console.warn("Fullscreen API failed", err);
-    });
+    // Try native Fullscreen API (works on Android Chrome)
+    const el = containerRef.current || document.documentElement;
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => {});
+    } else if ((el as any).webkitRequestFullscreen) {
+      (el as any).webkitRequestFullscreen();
+    }
 
-    // iOS Safari Minimal-UI nudge fallback
+    // iOS Safari fallback — minimal-ui trick
     if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
       document.documentElement.style.height = '110vh';
       document.body.style.height = '110vh';
@@ -38,7 +38,7 @@ const MobileController = () => {
         document.body.style.height = '100dvh';
       }, 300);
     }
-  }, [handle]);
+  }, []);
 
   useEffect(() => {
     if (!targetPeerId) return;
@@ -84,45 +84,95 @@ const MobileController = () => {
   }, 50), []);
 
   return (
-    <>
-      {/* ✅ FIX 3: Overlay lives OUTSIDE FullScreen — can't be remounted by the library */}
+    <div
+      ref={containerRef}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100vw',
+        height: '100dvh',
+        overflow: 'hidden',
+        background: 'white',
+      }}
+    >
+      {/* Start overlay — pointer-events only when visible */}
       {!isStarted && (
-        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-gray-900/90 text-white backdrop-blur-sm">
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(17, 24, 39, 0.92)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            touchAction: 'manipulation',
+          }}
+        >
           <button
-            onClick={handleStart}
-            className="bg-blue-600 px-10 py-5 rounded-2xl font-bold text-xl shadow-2xl active:scale-95 transition-transform"
+            onPointerUp={handleStart}  // onPointerUp is more reliable than onClick on mobile
+            style={{
+              background: '#2563eb',
+              color: 'white',
+              border: 'none',
+              borderRadius: '16px',
+              padding: '20px 40px',
+              fontSize: '20px',
+              fontWeight: 700,
+              boxShadow: '0 8px 32px rgba(37,99,235,0.4)',
+              cursor: 'pointer',
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent',
+              userSelect: 'none',
+            }}
           >
             Start Drawing
           </button>
-          <p className="mt-4 text-sm opacity-70 text-center px-6">
+          <p style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.6)', textAlign: 'center', padding: '0 24px' }}>
             Tap to enable full screen mode
           </p>
         </div>
       )}
 
-      <FullScreen handle={handle}>
-        <div className="relative h-[100dvh] w-screen bg-white overflow-hidden touch-none flex flex-col">
-          <div className="absolute left-2 top-2 z-50 rounded bg-black/50 px-2 py-1 text-[10px] text-white backdrop-blur-md pointer-events-none">
-            {status}
-          </div>
-          <div className="whiteboard h-full w-full overflow-hidden">
-            <Excalidraw
-              excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
-              onChange={onBoardChange}
-              UIOptions={{
-                welcomeScreen: false,
-                canvasActions: {
-                  toggleTheme: false,
-                  export: false,
-                  loadScene: false,
-                  changeViewBackgroundColor: false,
-                }
-              }}
-            />
-          </div>
-        </div>
-      </FullScreen>
-    </>
+      {/* Status badge */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 8,
+          left: 8,
+          zIndex: 50,
+          background: 'rgba(0,0,0,0.5)',
+          color: 'white',
+          borderRadius: 4,
+          padding: '2px 8px',
+          fontSize: 10,
+          backdropFilter: 'blur(4px)',
+          pointerEvents: 'none',
+        }}
+      >
+        {status}
+      </div>
+
+      {/* Excalidraw canvas */}
+      <div style={{ width: '100%', height: '100%' }}>
+        <Excalidraw
+          excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
+          onChange={onBoardChange}
+          UIOptions={{
+            welcomeScreen: false,
+            canvasActions: {
+              toggleTheme: false,
+              export: false,
+              loadScene: false,
+              changeViewBackgroundColor: false,
+            }
+          }}
+        />
+      </div>
+    </div>
   );
 };
 
