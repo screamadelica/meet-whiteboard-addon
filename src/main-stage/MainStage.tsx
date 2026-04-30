@@ -20,6 +20,7 @@ const MainStage = () => {
   
   const [pin, setPin] = useState<string>('');
   const [isLobby, setIsLobby] = useState(true);
+  const [peerReady, setPeerReady] = useState(false); // NEW: track when peer is open
   const [activeConnections, setActiveConnections] = useState<DataConnection[]>([]);
   const [showStyles, setShowStyles] = useState(false);
   const [isDrawTool, setIsDrawTool] = useState(false);  
@@ -32,37 +33,33 @@ const MainStage = () => {
 
   // --- 1. Meet SDK Init ---
   useEffect(() => {
+    let cancelled = false;
     const initMeet = async () => {
       try {
         const session = await meet.addon.createAddonSession({ 
-//          cloudProjectNumber: "547958960288"
           cloudProjectNumber: "109641982239" 
-
         });
+        if (cancelled) return;
         mainStageClient.current = await session.createMainStageClient();
       } catch (e) {
         console.error("Meet SDK Handshake Failed:", e);
       }
     };
     initMeet();
+    return () => { cancelled = true; };
   }, []);
 
   // --- 2. Throttled Broadcast ---
-  // useMemo ensures we don't recreate the throttle on every render, 
-  // but we pass activeConnections as a dependency or use a ref.
   const throttledBroadcast = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
     if (isRemoteUpdate.current || activeConnections.length === 0) return;
     
-    // Only send what changed
     const updates = elements.filter(el => el.version > (lastSentVersionMap.current.get(el.id) || -1));
     if (updates.length === 0) return;
 
     const message = JSON.stringify({ action: 'scene-update', elements: updates, isDiff: true });
     
     activeConnections.forEach(conn => {
-      if (conn.open) {
-        conn.send(message);
-      }
+      if (conn.open) conn.send(message);
     });
 
     updates.forEach(el => lastSentVersionMap.current.set(el.id, el.version));
@@ -85,7 +82,6 @@ const MainStage = () => {
 
     conn.on('data', (data: any) => {
       try {
-        // 1. Parse the incoming string
         const incomingData = JSON.parse(data);
 
         if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
@@ -93,12 +89,9 @@ const MainStage = () => {
           let nextElements: ExcalidrawElement[];
 
           if (incomingData.isDiff) {
-            // MERGE LOGIC: Use the Map with explicit types
             const map = new Map<string, ExcalidrawElement>(
               currentElements.map((e) => [e.id, e])
             );
-
-            // Cast incoming elements to ExcalidrawElement[] to access .version
             (incomingData.elements as ExcalidrawElement[]).forEach((remoteEl) => {
               const localEl = map.get(remoteEl.id);
               if (!localEl || remoteEl.version > localEl.version) {
@@ -110,14 +103,11 @@ const MainStage = () => {
             nextElements = incomingData.elements;
           }
 
-          // 2. Update the scene
           isRemoteUpdate.current = true;
           excalidrawAPI.current.updateScene({ elements: nextElements });
-          
-          // Update our local version tracker so we don't bounce this back
           nextElements.forEach((el) => lastSentVersionMap.current.set(el.id, el.version));
 
-          // 3. Relay to other connected mobile devices (Bridge mode)
+          // Relay to other connected mobile devices
           activeConnections.forEach(otherConn => {
             if (otherConn.open && otherConn.peer !== conn.peer) {
               otherConn.send(data);
@@ -137,21 +127,58 @@ const MainStage = () => {
   };
 
   const handleCreateBoard = async () => {
+    // Destroy any previous peer instance cleanly
+    if (peerInstance.current) {
+      peerInstance.current.destroy();
+      peerInstance.current = null;
+    }
+
+    setPeerReady(false);
+    setIsLobby(false); // show board immediately, QR shows "Starting..." until peer is ready
+
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     setPin(newPin);
-    let message = {
-      action: "pin",
-      prefix: PREFIX,
-      value: newPin,
-    };
-    if (mainStageClient.current) {
-      await mainStageClient.current.notifySidePanel(JSON.stringify(message))
-    }
-    const peer = new Peer(PREFIX + newPin);
+
+    // Use a random suffix to avoid ID collisions with stale broker registrations
+    const peerId = PREFIX + newPin + '-' + Date.now();
+
+    const peer = new Peer(peerId);
     peerInstance.current = peer;
-    peer.on('open', () => setIsLobby(false));
+
+    peer.on('open', async (id) => {
+      console.log('Peer open with ID:', id);
+      setPeerReady(true); // NOW it's safe to show the QR / notify side panel
+
+      // Only notify side panel after peer is ready
+      const message = {
+        action: "pin",
+        prefix: PREFIX,
+        value: newPin,
+        peerId: id, // send the full peer ID, not just the pin
+      };
+      if (mainStageClient.current) {
+        await mainStageClient.current.notifySidePanel(JSON.stringify(message));
+      }
+    });
+
     peer.on('connection', setupConnection);
+
+    peer.on('error', (err) => {
+      console.error('PeerJS error:', err);
+      // If ID is taken, retry with a new pin
+      if (err.type === 'unavailable-id') {
+        console.warn('Peer ID taken, retrying...');
+        handleCreateBoard();
+      }
+    });
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      peerInstance.current?.destroy();
+    };
+  }, []);
 
   if (isLobby) {
     return (
@@ -165,7 +192,13 @@ const MainStage = () => {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <div className="relative flex-1" >
+      {/* Show a "waiting for peer" indicator until ready */}
+      {!peerReady && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80">
+          <p className="text-gray-500 text-sm">Starting board...</p>
+        </div>
+      )}
+      <div className="relative flex-1">
         <div className={`whiteboard h-full ${showStyles ? "" : "hide-style-panel"}`}>
           <Excalidraw 
             excalidrawAPI={(api) => (excalidrawAPI.current = api)}

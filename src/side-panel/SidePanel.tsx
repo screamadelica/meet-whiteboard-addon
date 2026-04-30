@@ -5,6 +5,7 @@ const SidePanel = () => {
   const [client, setClient] = useState<any>(null);
   const [pin, setPin] = useState<string | null>(null);
   const [prefix, setPrefix] = useState<string | null>(null);
+  const [peerId, setPeerId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +29,7 @@ const SidePanel = () => {
           if (receivedMessage.action === 'pin') {
             setPin(receivedMessage.value);
             setPrefix(receivedMessage.prefix);
+            setPeerId(receivedMessage.peerId);
           }
         });
 
@@ -73,7 +75,7 @@ const SidePanel = () => {
         <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center my-2 flex flex-col items-center gap-3">
           <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Session PIN</span>
           <div className="bg-white p-2 rounded-md shadow-sm border border-slate-100">
-            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}/mobile.html?peerId=${prefix + pin}`)}`} alt="QR" className="h-30 w-30" />
+            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}/mobile.html?peerId=${peerId}`)}`} alt="QR" className="h-30 w-30" />
           </div>
           <span className="text-2xl font-mono font-bold text-[#1a73e8] tracking-[0.2em]">{pin}</span>
         </div>

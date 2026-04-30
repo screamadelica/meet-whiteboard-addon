@@ -5,6 +5,9 @@ import Peer, { DataConnection } from 'peerjs';
 import throttle from 'lodash.throttle';
 import "./whiteboard.css";
 
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 2000;
+
 const MobileController = () => {
   const [status, setStatus] = useState("Connecting...");
   const [isStarted, setIsStarted] = useState(false);
@@ -13,14 +16,16 @@ const MobileController = () => {
   const versionMap = useRef(new Map<string, number>());
   const connectionRef = useRef<DataConnection | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const retryCount = useRef(0);
+  const peerRef = useRef<Peer | null>(null);
 
   const urlParams = new URLSearchParams(window.location.search);
+  // peerId is now the full peer ID sent from MainStage, not just prefix+pin
   const targetPeerId = urlParams.get('peerId');
 
   const handleStart = useCallback(() => {
     setIsStarted(true);
 
-    // Try native Fullscreen API (works on Android Chrome)
     const el = containerRef.current || document.documentElement;
     if (el.requestFullscreen) {
       el.requestFullscreen().catch(() => {});
@@ -28,7 +33,6 @@ const MobileController = () => {
       (el as any).webkitRequestFullscreen();
     }
 
-    // iOS Safari fallback — minimal-ui trick
     if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
       document.documentElement.style.height = '110vh';
       document.body.style.height = '110vh';
@@ -40,39 +44,92 @@ const MobileController = () => {
     }
   }, []);
 
-  useEffect(() => {
-    if (!targetPeerId) return;
-    const peer = new Peer();
-    peer.on('open', () => {
-      const conn = peer.connect(targetPeerId);
-      connectionRef.current = conn;
-      conn.on('open', () => setStatus("Connected"));
-      conn.on('data', (data: any) => {
-        try {
-          const incomingData = JSON.parse(data);
-          if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
-            const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
-            let nextElements: ExcalidrawElement[];
-            if (incomingData.isDiff) {
-              const map = new Map(currentElements.map((e) => [e.id, e]));
-              (incomingData.elements as ExcalidrawElement[]).forEach((remoteEl) => {
-                const localEl = map.get(remoteEl.id);
-                if (!localEl || remoteEl.version > localEl.version) map.set(remoteEl.id, remoteEl);
-              });
-              nextElements = Array.from(map.values());
-            } else {
-              nextElements = incomingData.elements;
-            }
-            isRemoteUpdate.current = true;
-            excalidrawAPI.current.updateScene({ elements: nextElements });
-            nextElements.forEach((el) => versionMap.current.set(el.id, el.version));
-          }
-          setTimeout(() => { isRemoteUpdate.current = false; }, 100);
-        } catch (e) { console.error("Mobile parse error", e); }
-      });
+  const connectToPeer = useCallback((peer: Peer, peerId: string) => {
+    setStatus(`Connecting... (attempt ${retryCount.current + 1})`);
+    const conn = peer.connect(peerId, { reliable: true });
+    connectionRef.current = conn;
+
+    const timeout = setTimeout(() => {
+      if (conn.open) return;
+      conn.close();
+      retryCount.current += 1;
+      if (retryCount.current < MAX_RETRIES) {
+        setStatus(`Retrying... (${retryCount.current}/${MAX_RETRIES})`);
+        setTimeout(() => connectToPeer(peer, peerId), RETRY_DELAY_MS);
+      } else {
+        setStatus("Could not connect. Please rescan the QR code.");
+      }
+    }, 5000);
+
+    conn.on('open', () => {
+      clearTimeout(timeout);
+      retryCount.current = 0;
+      setStatus("Connected ✓");
     });
-    return () => peer.destroy();
-  }, [targetPeerId]);
+
+    conn.on('data', (data: any) => {
+      try {
+        const incomingData = JSON.parse(data);
+        if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
+          const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
+          let nextElements: ExcalidrawElement[];
+          if (incomingData.isDiff) {
+            const map = new Map(currentElements.map((e) => [e.id, e]));
+            (incomingData.elements as ExcalidrawElement[]).forEach((remoteEl) => {
+              const localEl = map.get(remoteEl.id);
+              if (!localEl || remoteEl.version > localEl.version) map.set(remoteEl.id, remoteEl);
+            });
+            nextElements = Array.from(map.values());
+          } else {
+            nextElements = incomingData.elements;
+          }
+          isRemoteUpdate.current = true;
+          excalidrawAPI.current.updateScene({ elements: nextElements });
+          nextElements.forEach((el) => versionMap.current.set(el.id, el.version));
+          setTimeout(() => { isRemoteUpdate.current = false; }, 100);
+        }
+      } catch (e) { console.error("Mobile parse error", e); }
+    });
+
+    conn.on('close', () => {
+      setStatus("Disconnected — retrying...");
+      setTimeout(() => connectToPeer(peer, peerId), RETRY_DELAY_MS);
+    });
+
+    conn.on('error', (err) => {
+      clearTimeout(timeout);
+      console.error('Connection error:', err);
+      retryCount.current += 1;
+      if (retryCount.current < MAX_RETRIES) {
+        setTimeout(() => connectToPeer(peer, peerId), RETRY_DELAY_MS);
+      } else {
+        setStatus("Connection failed. Please rescan the QR code.");
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!targetPeerId) {
+      setStatus("No peer ID found in URL");
+      return;
+    }
+
+    const peer = new Peer();
+    peerRef.current = peer;
+
+    peer.on('open', () => {
+      connectToPeer(peer, targetPeerId);
+    });
+
+    peer.on('error', (err) => {
+      console.error('Peer error:', err);
+      setStatus("Peer error: " + err.type);
+    });
+
+    return () => {
+      peer.destroy();
+    };
+  }, [targetPeerId, connectToPeer]);
 
   const onBoardChange = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
     if (isRemoteUpdate.current || !connectionRef.current?.open) return;
@@ -95,7 +152,6 @@ const MobileController = () => {
         background: 'white',
       }}
     >
-      {/* Start overlay — pointer-events only when visible */}
       {!isStarted && (
         <div
           style={{
@@ -113,7 +169,7 @@ const MobileController = () => {
           }}
         >
           <button
-            onPointerUp={handleStart}  // onPointerUp is more reliable than onClick on mobile
+            onPointerUp={handleStart}
             style={{
               background: '#2563eb',
               color: 'white',
@@ -129,7 +185,7 @@ const MobileController = () => {
               userSelect: 'none',
             }}
           >
-            Start Drawing 2
+            Start Drawing
           </button>
           <p style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.6)', textAlign: 'center', padding: '0 24px' }}>
             Tap to enable full screen mode
@@ -137,26 +193,25 @@ const MobileController = () => {
         </div>
       )}
 
-      {/* Status badge */}
       <div
         style={{
           position: 'absolute',
           top: 8,
           left: 8,
           zIndex: 50,
-          background: 'rgba(0,0,0,0.5)',
+          background: status.includes('✓') ? 'rgba(22,101,52,0.8)' : 'rgba(0,0,0,0.5)',
           color: 'white',
           borderRadius: 4,
           padding: '2px 8px',
           fontSize: 10,
           backdropFilter: 'blur(4px)',
           pointerEvents: 'none',
+          transition: 'background 0.3s',
         }}
       >
         {status}
       </div>
 
-      {/* Excalidraw canvas */}
       <div style={{ width: '100%', height: '100%' }}>
         <Excalidraw
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
