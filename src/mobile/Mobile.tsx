@@ -20,19 +20,18 @@ const MobileController = () => {
   const peerRef = useRef<Peer | null>(null);
 
   const urlParams = new URLSearchParams(window.location.search);
-  // peerId is now the full peer ID sent from MainStage, not just prefix+pin
   const targetPeerId = urlParams.get('peerId');
+
+  console.log('[Mobile] Page loaded. targetPeerId from URL:', targetPeerId);
 
   const handleStart = useCallback(() => {
     setIsStarted(true);
-
     const el = containerRef.current || document.documentElement;
     if (el.requestFullscreen) {
       el.requestFullscreen().catch(() => {});
     } else if ((el as any).webkitRequestFullscreen) {
       (el as any).webkitRequestFullscreen();
     }
-
     if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
       document.documentElement.style.height = '110vh';
       document.body.style.height = '110vh';
@@ -45,29 +44,35 @@ const MobileController = () => {
   }, []);
 
   const connectToPeer = useCallback((peer: Peer, peerId: string) => {
-    setStatus(`Connecting... (attempt ${retryCount.current + 1})`);
+    console.log(`[Mobile] Attempting connection to: "${peerId}" (attempt ${retryCount.current + 1}/${MAX_RETRIES})`);
+    setStatus(`Connecting... (${retryCount.current + 1}/${MAX_RETRIES})`);
+
     const conn = peer.connect(peerId, { reliable: true });
     connectionRef.current = conn;
 
     const timeout = setTimeout(() => {
       if (conn.open) return;
+      console.warn(`[Mobile] Connection to "${peerId}" timed out after 5s`);
       conn.close();
       retryCount.current += 1;
       if (retryCount.current < MAX_RETRIES) {
-        setStatus(`Retrying... (${retryCount.current}/${MAX_RETRIES})`);
+        setStatus(`Timeout — retrying (${retryCount.current}/${MAX_RETRIES})...`);
         setTimeout(() => connectToPeer(peer, peerId), RETRY_DELAY_MS);
       } else {
-        setStatus("Could not connect. Please rescan the QR code.");
+        console.error('[Mobile] Max retries reached. Could not connect to:', peerId);
+        setStatus("❌ Could not connect. Please rescan the QR code.");
       }
     }, 5000);
 
     conn.on('open', () => {
       clearTimeout(timeout);
       retryCount.current = 0;
+      console.log('[Mobile] ✓ Connection opened with:', peerId);
       setStatus("Connected ✓");
     });
 
     conn.on('data', (data: any) => {
+      console.log('[Mobile] Data received, length:', String(data).length);
       try {
         const incomingData = JSON.parse(data);
         if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
@@ -88,45 +93,56 @@ const MobileController = () => {
           nextElements.forEach((el) => versionMap.current.set(el.id, el.version));
           setTimeout(() => { isRemoteUpdate.current = false; }, 100);
         }
-      } catch (e) { console.error("Mobile parse error", e); }
+      } catch (e) { console.error('[Mobile] Parse error:', e); }
     });
 
     conn.on('close', () => {
+      console.warn('[Mobile] Connection closed unexpectedly, will retry...');
       setStatus("Disconnected — retrying...");
       setTimeout(() => connectToPeer(peer, peerId), RETRY_DELAY_MS);
     });
 
     conn.on('error', (err) => {
       clearTimeout(timeout);
-      console.error('Connection error:', err);
+      console.error('[Mobile] Connection error:', err);
       retryCount.current += 1;
       if (retryCount.current < MAX_RETRIES) {
         setTimeout(() => connectToPeer(peer, peerId), RETRY_DELAY_MS);
       } else {
-        setStatus("Connection failed. Please rescan the QR code.");
+        setStatus("❌ Connection failed. Please rescan the QR code.");
       }
     });
   }, []);
 
   useEffect(() => {
     if (!targetPeerId) {
-      setStatus("No peer ID found in URL");
+      console.error('[Mobile] No peerId in URL params. Full URL:', window.location.href);
+      setStatus("❌ No peer ID in URL");
       return;
     }
 
+    console.log('[Mobile] Initialising PeerJS...');
     const peer = new Peer();
     peerRef.current = peer;
 
-    peer.on('open', () => {
+    peer.on('open', (myId) => {
+      console.log('[Mobile] ✓ My peer ID assigned:', myId);
+      console.log('[Mobile] Now connecting to MainStage peer:', targetPeerId);
       connectToPeer(peer, targetPeerId);
     });
 
     peer.on('error', (err) => {
-      console.error('Peer error:', err);
-      setStatus("Peer error: " + err.type);
+      console.error('[Mobile] Peer-level error:', err.type, err);
+      setStatus(`❌ Peer error: ${err.type}`);
+    });
+
+    peer.on('disconnected', () => {
+      console.warn('[Mobile] Peer disconnected from broker, attempting reconnect...');
+      peer.reconnect();
     });
 
     return () => {
+      console.log('[Mobile] Cleaning up peer');
       peer.destroy();
     };
   }, [targetPeerId, connectToPeer]);
@@ -143,72 +159,42 @@ const MobileController = () => {
   return (
     <div
       ref={containerRef}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        width: '100vw',
-        height: '100dvh',
-        overflow: 'hidden',
-        background: 'white',
-      }}
+      style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', overflow: 'hidden', background: 'white' }}
     >
       {!isStarted && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(17, 24, 39, 0.92)',
-            backdropFilter: 'blur(4px)',
-            WebkitBackdropFilter: 'blur(4px)',
-            touchAction: 'manipulation',
-          }}
-        >
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(17, 24, 39, 0.92)', backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)', touchAction: 'manipulation',
+        }}>
           <button
             onPointerUp={handleStart}
             style={{
-              background: '#2563eb',
-              color: 'white',
-              border: 'none',
-              borderRadius: '16px',
-              padding: '20px 40px',
-              fontSize: '20px',
-              fontWeight: 700,
-              boxShadow: '0 8px 32px rgba(37,99,235,0.4)',
-              cursor: 'pointer',
-              touchAction: 'manipulation',
-              WebkitTapHighlightColor: 'transparent',
-              userSelect: 'none',
+              background: '#2563eb', color: 'white', border: 'none', borderRadius: '16px',
+              padding: '20px 40px', fontSize: '20px', fontWeight: 700,
+              boxShadow: '0 8px 32px rgba(37,99,235,0.4)', cursor: 'pointer',
+              touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent', userSelect: 'none',
             }}
           >
-            Start Drawing
+            Start Drawing!
           </button>
           <p style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.6)', textAlign: 'center', padding: '0 24px' }}>
             Tap to enable full screen mode
           </p>
+          {/* Show peerId in UI for debugging */}
+          <p style={{ marginTop: 8, fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', padding: '0 24px', textAlign: 'center', wordBreak: 'break-all' }}>
+            Target: {targetPeerId ?? 'none'}
+          </p>
         </div>
       )}
 
-      <div
-        style={{
-          position: 'absolute',
-          top: 8,
-          left: 8,
-          zIndex: 50,
-          background: status.includes('✓') ? 'rgba(22,101,52,0.8)' : 'rgba(0,0,0,0.5)',
-          color: 'white',
-          borderRadius: 4,
-          padding: '2px 8px',
-          fontSize: 10,
-          backdropFilter: 'blur(4px)',
-          pointerEvents: 'none',
-          transition: 'background 0.3s',
-        }}
-      >
+      <div style={{
+        position: 'absolute', top: 8, left: 8, zIndex: 50,
+        background: status.includes('✓') ? 'rgba(22,101,52,0.8)' : status.includes('❌') ? 'rgba(153,27,27,0.8)' : 'rgba(0,0,0,0.5)',
+        color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 10,
+        backdropFilter: 'blur(4px)', pointerEvents: 'none', transition: 'background 0.3s',
+      }}>
         {status}
       </div>
 
@@ -218,12 +204,7 @@ const MobileController = () => {
           onChange={onBoardChange}
           UIOptions={{
             welcomeScreen: false,
-            canvasActions: {
-              toggleTheme: false,
-              export: false,
-              loadScene: false,
-              changeViewBackgroundColor: false,
-            }
+            canvasActions: { toggleTheme: false, export: false, loadScene: false, changeViewBackgroundColor: false }
           }}
         />
       </div>
