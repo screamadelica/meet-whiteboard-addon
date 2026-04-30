@@ -11,12 +11,17 @@ export default defineConfig({
     VitePWA({
       workbox: {
         maximumFileSizeToCacheInBytes: 3000000,
-        navigateFallbackDenylist: [/\/side-panel\.html/, /\/main-stage\.html/],
+        navigateFallbackDenylist: [
+          /\/side-panel\.html/, 
+          /\/main-stage\.html/,
+           /\/mobile\.html/,
+        ],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => 
               url.pathname.includes('side-panel') ||
-              url.pathname.includes('main-stage'),
+              url.pathname.includes('main-stage') ||
+              url.pathname.includes('mobile'),
             handler: 'NetworkOnly',
           }
         ]   
