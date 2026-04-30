@@ -129,7 +129,7 @@ const MobileController = () => {
               userSelect: 'none',
             }}
           >
-            Start Drawing
+            Start Drawing 2
           </button>
           <p style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.6)', textAlign: 'center', padding: '0 24px' }}>
             Tap to enable full screen mode
