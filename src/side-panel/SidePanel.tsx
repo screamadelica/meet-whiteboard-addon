@@ -54,7 +54,7 @@ const SidePanel = () => {
 
   return (
     <div className="p-6 flex flex-col gap-3 text-[#3c4043] font-sans">
-      <h2 className="text-[18px] font-medium m-0">Whiteboard Add-on</h2>
+      <h2 className="text-[18px] font-medium m-0">Tudraw Whiteboard Add-on</h2>
       <p className="text-sm leading-5 mb-2">
         Collaborate with your team by launching the whiteboard on the main stage.
       </p>

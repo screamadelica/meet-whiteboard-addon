@@ -13,3 +13,6 @@ yarn-error.log*
 # Build output
 dist/
 build/
+
+# Deployment
+deployment.yaml
