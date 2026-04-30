@@ -12,6 +12,15 @@
       ]
     },
     {
+      "source": "/(.*).html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/sw.js",
       "headers": [
         {
@@ -32,10 +41,11 @@
           "value": "ALLOW-FROM https://meet.google.com"
         }
       ]
-    }  
+    }
   ],
   "rewrites": [
     { "source": "/side-panel", "destination": "/side-panel.html" },
-    { "source": "/main-stage", "destination": "/main-stage.html" }
+    { "source": "/main-stage", "destination": "/main-stage.html" },
+    { "source": "/mobile", "destination": "/mobile.html" }
   ]
 }
