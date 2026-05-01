@@ -9,8 +9,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      registerType: 'autoUpdate',
+      filename: 'meetsw.js',
       workbox: {
         maximumFileSizeToCacheInBytes: 3000000,
+        navigateFallback: null,
         navigateFallbackDenylist: [
           /\/side-panel\.html/, 
           /\/main-stage\.html/,

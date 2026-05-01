@@ -21,7 +21,7 @@
       ]
     },
     {
-      "source": "/sw.js",
+      "source": "/meetsw.js",
       "headers": [
         {
           "key": "Cache-Control",
