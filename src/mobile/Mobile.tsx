@@ -121,6 +121,25 @@ const MobileController = () => {
   }, []);
 
   useEffect(() => {
+    const diagnose = async () => {
+      if (!('caches' in window)) {
+        setStatus('No cache API');
+        return;
+      }
+      const keys = await caches.keys();
+      const details: string[] = [];
+      for (const name of keys) {
+        const cache = await caches.open(name);
+        const requests = await cache.keys();
+        const urls = requests.map(r => r.url.split('/').pop() ?? r.url);
+        details.push(`${name}: ${urls.join(', ')}`);
+      }
+      setStatus(details.join(' | ') || 'No caches found');
+    };
+    diagnose();
+  }, []);
+
+  useEffect(() => {
     if (!targetPeerId) {
       console.error('[Mobile] No peerId in URL params. Full URL:', window.location.href);
       setStatus("❌ No peer ID in URL");
@@ -202,7 +221,7 @@ const MobileController = () => {
               touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent', userSelect: 'none',
             }}
           >
-            Start Drawing 1!
+            Start Drawing 2!
           </button>
           <p style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.6)', textAlign: 'center', padding: '0 24px' }}>
             Tap to enable full screen mode
