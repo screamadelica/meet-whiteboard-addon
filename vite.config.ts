@@ -5,6 +5,9 @@ import { resolve } from "path";
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  define: {
+    '{{VITE_APP_VERSION}}': JSON.stringify(Date.now().toString()),
+  },
   plugins: [
     react(),
     tailwindcss(),
