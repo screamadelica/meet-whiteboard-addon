@@ -17,6 +17,13 @@ export default defineConfig({
       workbox: {
         maximumFileSizeToCacheInBytes: 3000000,
         navigateFallback: null,
+        
+        globIgnores: [
+          '**/mobile.html',
+          '**/side-panel.html',
+          '**/main-stage.html',
+        ],
+
         navigateFallbackDenylist: [
           /\/side-panel\.html/, 
           /\/main-stage\.html/,
