@@ -9,8 +9,7 @@ export default defineConfig({
     tailwindcss(),
   ],
   define: {
-    "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV),
-    '{{VITE_APP_VERSION}}': JSON.stringify(Date.now().toString()),
+    "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV)
   },
   server: {
     proxy: {
