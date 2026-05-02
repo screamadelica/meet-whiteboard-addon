@@ -1,12 +1,12 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "cleanUrls": true,
+  "cleanUrls": false,
   "trailingSlash": false,  
   "rewrites": [
-    { "source": "/side-panel.html", "destination": "/side-panel.html" },
-    { "source": "/main-stage.html", "destination": "/main-stage.html" },
-    { "source": "/mobile.html", "destination": "/mobile.html" },
+    { "source": "/side-panel", "destination": "/side-panel.html" },
+    { "source": "/main-stage", "destination": "/main-stage.html" },
+    { "source": "/mobile", "destination": "/mobile.html" },
     { "source": "/api/:name", "destination": "/api/:name.js" }
   ],
   "builds": [
