@@ -2,46 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
-import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      filename: 'meetsw.js',
-      workbox: {
-        maximumFileSizeToCacheInBytes: 3000000,
-        navigateFallback: null,
-        
-        globIgnores: [
-          '**/mobile.html',
-          '**/side-panel.html',
-          '**/main-stage.html',
-        ],
-
-        navigateFallbackDenylist: [
-          /\/side-panel\.html/, 
-          /\/main-stage\.html/,
-           /\/mobile\.html/,
-        ],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => 
-              url.pathname.includes('side-panel') ||
-              url.pathname.includes('main-stage') ||
-              url.pathname.includes('mobile'),
-            handler: 'NetworkOnly',
-          }
-        ]   
-      },
-      manifest: {
-        display: 'fullscreen', // This is what hides the Chrome URL bar
-        orientation: 'landscape',
-        theme_color: '#ffffff',
-      }
-    })
   ],
   define: {
     "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV),
@@ -51,10 +16,6 @@ export default defineConfig({
     proxy: {
       // Proxies '/api' requests to your local Vercel functions during dev
       '/api': {
-        target: 'http://localhost:3000', 
-        changeOrigin: true,
-      },
-      '/src': {
         target: 'http://localhost:3000', 
         changeOrigin: true,
       }

@@ -1,48 +1,6 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Content-Security-Policy",
-          "value": "frame-ancestors 'self' https://meet.google.com https://*.google.com;"
-        }
-      ]
-    },
-    {
-      "source": "/(.*).html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/meetsw.js",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-cache, no-store, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/side-panel.html",
-      "headers": [
-        {
-          "key": "Content-Security-Policy",
-          "value": "frame-ancestors 'self' https://meet.google.com https://*.google.com;"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "ALLOW-FROM https://meet.google.com"
-        }
-      ]
-    }
-  ],
   "rewrites": [
     { "source": "/side-panel", "destination": "/side-panel.html" },
     { "source": "/main-stage", "destination": "/main-stage.html" },
