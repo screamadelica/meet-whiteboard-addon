@@ -8,8 +8,5 @@
     { "source": "/main-stage", "destination": "/main-stage.html" },
     { "source": "/mobile", "destination": "/mobile.html" },
     { "source": "/api/:name", "destination": "/api/:name.js" }
-  ],
-  "builds": [
-    { "src": "api/**/*.js", "use": "@vercel/node" }
-  ]  
+  ]
 }
