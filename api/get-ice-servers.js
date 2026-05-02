@@ -24,8 +24,7 @@ export default async function handler(request, response) {
         
         throw new Error('No dynamic ICE provider available');
     } catch (error) {
-        console.warn('[API] get-ice-servers error:', error.message);
-        
+        console.error('[API] UNHANDLED ERROR:', error); // check your server terminal
         return response.status(200).json({
             config: {
                 "iceServers":[

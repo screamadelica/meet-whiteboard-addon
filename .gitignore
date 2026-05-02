@@ -16,3 +16,5 @@ build/
 
 # Deployment
 deployment.yaml
+.vercel
+.env*.local

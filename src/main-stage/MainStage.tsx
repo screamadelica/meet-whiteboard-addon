@@ -177,12 +177,14 @@ const MainStage = () => {
       iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
     }
 
+    console.log('[Main Stage] IceServers', iceServers)
+
     const peer = new Peer(peerId, {
       config: { iceServers }
     });
     peerInstance.current = peer;
 
-    console.log('peer created')
+    console.log('[Main Stage] Peer created')
 
     peer.on('open', async (id) => {
       console.log('[MainStage] ✓ Peer open with ID:', id);

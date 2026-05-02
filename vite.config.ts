@@ -5,9 +5,6 @@ import { resolve } from "path";
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  define: {
-    '{{VITE_APP_VERSION}}': JSON.stringify(Date.now().toString()),
-  },
   plugins: [
     react(),
     tailwindcss(),
@@ -48,6 +45,7 @@ export default defineConfig({
   ],
   define: {
     "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV),
+    '{{VITE_APP_VERSION}}': JSON.stringify(Date.now().toString()),
   },
   server: {
     proxy: {
@@ -56,6 +54,10 @@ export default defineConfig({
         target: 'http://localhost:3000', 
         changeOrigin: true,
       },
+      '/src': {
+        target: 'http://localhost:3000', 
+        changeOrigin: true,
+      }
     },
   },
   build: {
