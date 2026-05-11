@@ -1,1 +1,3 @@
 Whiteboard
+
+How to use
