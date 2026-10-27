@@ -97,12 +97,23 @@ const MainStage = () => {
   }, 50), [activeConnections]);
 
   // --- 3. Connection Logic ---
+  const viewMessage = (app: any) => JSON.stringify({
+    action: 'stage-view',
+    rect: { x: -app.scrollX, y: -app.scrollY, width: app.width / app.zoom.value, height: app.height / app.zoom.value },
+  });
+
+  const throttledViewBroadcast = useMemo(() => throttle((app: any) => {
+    const message = viewMessage(app);
+    activeConnections.forEach(conn => { if (conn.open) conn.send(message); });
+  }, 100), [activeConnections]);
+
   const setupConnection = (conn: DataConnection) => {
     console.log('[MainStage] Incoming connection from peer:', conn.peer);
     conn.on('open', () => {
       console.log('[MainStage] ✓ Connection opened with:', conn.peer);
       setActiveConnections(prev => [...prev, conn]);
       if (excalidrawAPI.current) {
+        conn.send(viewMessage(excalidrawAPI.current.getAppState()));
         conn.send(JSON.stringify({ 
           action: 'scene-update', 
           elements: excalidrawAPI.current.getSceneElements(),
@@ -246,6 +257,7 @@ const MainStage = () => {
             onChange={(elements, appState) => {
               setIsDrawTool(appState.activeTool.type === "freedraw");
               throttledBroadcast(elements);
+              throttledViewBroadcast(appState);
             }}
             renderTopRightUI={() =>
               isDrawTool ? (

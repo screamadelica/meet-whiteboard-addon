@@ -50,6 +50,8 @@ const MobileController = () => {
   }, []);
 
   const [isLandscape, setIsLandscape] = useState(false);
+  const [stageRect, setStageRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [view, setView] = useState({ scrollX: 0, scrollY: 0, zoom: 1 });
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [fsError, setFsError] = useState('');
@@ -136,6 +138,10 @@ const MobileController = () => {
       console.log('[Mobile] Data received, length:', String(data).length);
       try {
         const incomingData = JSON.parse(data);
+        if (incomingData.action === 'stage-view') {
+          setStageRect(incomingData.rect);
+          return;
+        }
         if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
           const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
           let nextElements: ExcalidrawElement[];
@@ -308,7 +314,11 @@ const MobileController = () => {
       <div className="whiteboard" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: isLandscape ? 36 : 0, width: 'auto', height: 'auto', pointerEvents: 'auto' }}>
         <Excalidraw
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
-          onChange={onBoardChange}
+          onChange={(elements, appState) => {
+            onBoardChange(elements);
+            const next = { scrollX: appState.scrollX, scrollY: appState.scrollY, zoom: appState.zoom.value };
+            setView((v) => (v.scrollX === next.scrollX && v.scrollY === next.scrollY && v.zoom === next.zoom ? v : next));
+          }}
           renderTopRightUI={() => (
             <div style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
               <button
@@ -340,6 +350,16 @@ const MobileController = () => {
             canvasActions: { toggleTheme: false, export: false, loadScene: false, changeViewBackgroundColor: false }
           }}
         />
+        {stageRect && (
+          <div style={{
+            position: 'absolute', zIndex: 5, pointerEvents: 'none', boxSizing: 'border-box',
+            left: (stageRect.x + view.scrollX) * view.zoom,
+            top: (stageRect.y + view.scrollY) * view.zoom,
+            width: stageRect.width * view.zoom,
+            height: stageRect.height * view.zoom,
+            border: '2px dashed #2563eb', background: 'rgba(37,99,235,0.05)',
+          }} />
+        )}
       </div>
     </div>
   );
