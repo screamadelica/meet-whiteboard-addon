@@ -287,14 +287,16 @@ const MobileController = () => {
         {status}
       </div>
 
-      <div style={{
-        position: 'absolute', top: 0, bottom: 0, right: 0, width: 36, background: '#e5e7eb',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-      }}>
-        <div style={{ width: 4, height: 48, borderRadius: 2, background: '#9ca3af' }} />
-      </div>
+      {isLandscape && (
+        <div style={{
+          position: 'absolute', top: 0, bottom: 0, right: 0, width: 36, background: '#e5e7eb',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+        }}>
+          <div style={{ width: 4, height: 48, borderRadius: 2, background: '#9ca3af' }} />
+        </div>
+      )}
 
-      <div className="whiteboard" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 36, width: 'auto', height: 'auto', pointerEvents: 'auto' }}>
+      <div className="whiteboard" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: isLandscape ? 36 : 0, width: 'auto', height: 'auto', pointerEvents: 'auto' }}>
         <Excalidraw
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
           onChange={onBoardChange}
@@ -303,11 +305,11 @@ const MobileController = () => {
               onClick={resetCanvas}
               title="Reset the canvas"
               style={{
-                height: 36, padding: '0 12px', borderRadius: 10, border: '1px solid #d1d5db',
+                height: 'var(--lg-button-size, 2.25rem)', boxSizing: 'border-box', padding: '0 12px', borderRadius: 10, border: '1px solid #d1d5db',
                 background: 'white', color: '#b91c1c', fontSize: 13, fontWeight: 600,
               }}
             >
-              Reset
+              Clear
             </button>
           )}
           UIOptions={{
