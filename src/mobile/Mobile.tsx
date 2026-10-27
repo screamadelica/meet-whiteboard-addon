@@ -50,27 +50,38 @@ const MobileController = () => {
   }, []);
 
   const [isLandscape, setIsLandscape] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const enterFullscreen = useCallback(() => {
+    if (document.fullscreenElement) return;
+    const el: any = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    // Lock keeps landscape once fullscreen; it is only permitted while fullscreen.
+    Promise.resolve(req?.call(el, { navigationUI: 'hide' }))
+      .then(() => (screen.orientation as any)?.lock?.('landscape')?.catch(() => {}))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const mq = window.matchMedia('(orientation: landscape)');
-    const enterFullscreen = () => {
-      if (document.fullscreenElement) return;
-      (containerRef.current || document.documentElement).requestFullscreen?.().catch(() => {});
-    };
-    // Chrome only allows fullscreen from a user gesture, so retry on the next touch if rotation alone is refused.
-    const onTouch = () => { if (mq.matches) enterFullscreen(); };
+    // Chrome refuses fullscreen without a user gesture, so retry on any touch/click while landscape.
+    const onGesture = () => { if (mq.matches) enterFullscreen(); };
     const onChange = () => {
       setIsLandscape(mq.matches);
       if (mq.matches) enterFullscreen();
     };
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
     setIsLandscape(mq.matches);
     mq.addEventListener('change', onChange);
-    document.addEventListener('pointerup', onTouch);
+    document.addEventListener('fullscreenchange', onFsChange);
+    const events = ['touchend', 'click', 'pointerup'];
+    events.forEach((e) => document.addEventListener(e, onGesture, true));
     return () => {
       mq.removeEventListener('change', onChange);
-      document.removeEventListener('pointerup', onTouch);
+      document.removeEventListener('fullscreenchange', onFsChange);
+      events.forEach((e) => document.removeEventListener(e, onGesture, true));
     };
-  }, []);
+  }, [enterFullscreen]);
 
   const connectToPeer = useCallback((peer: Peer, peerId: string) => {
     console.log(`[Mobile] Attempting connection to: "${peerId}" (attempt ${retryCount.current + 1}/${MAX_RETRIES})`);
@@ -246,6 +257,19 @@ const MobileController = () => {
       }}>
         {status}
       </div>
+
+      {isStarted && isLandscape && !isFullscreen && (
+        <button
+          onClick={enterFullscreen}
+          style={{
+            position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 60,
+            background: '#2563eb', color: 'white', border: 'none', borderRadius: 999,
+            padding: '8px 18px', fontSize: 14, fontWeight: 600, opacity: 0.9,
+          }}
+        >
+          Tap for full screen
+        </button>
+      )}
 
       <div style={{ width: '100%', height: '100%' }}>
         <Excalidraw
