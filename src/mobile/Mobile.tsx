@@ -244,6 +244,15 @@ const MobileController = () => {
       connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements: [], isDiff: false }));
   }, []);
 
+  const showOnStage = useCallback(() => {
+    const api = excalidrawAPI.current;
+    if (!api || !connectionRef.current?.open) return;
+    const app = api.getAppState();
+    const zoom = app.zoom.value;
+    const rect = { x: -app.scrollX, y: -app.scrollY, width: app.width / zoom, height: app.height / zoom };
+    connectionRef.current.send(JSON.stringify({ action: 'show-area', rect }));
+  }, []);
+
   return (
     <div
       ref={containerRef}
@@ -301,16 +310,30 @@ const MobileController = () => {
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
           onChange={onBoardChange}
           renderTopRightUI={() => (
-            <button
-              onClick={resetCanvas}
-              title="Reset the canvas"
-              style={{
-                alignSelf: 'stretch', minHeight: 'var(--lg-button-size, 2.25rem)', boxSizing: 'border-box', padding: '0 12px', borderRadius: 10, border: '1px solid #d1d5db',
-                background: 'white', color: '#b91c1c', fontSize: 13, fontWeight: 600,
-              }}
-            >
-              Clear
-            </button>
+            <div style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
+              <button
+                onClick={showOnStage}
+                title="Show this area on the main stage"
+                style={{
+                  alignSelf: 'stretch', minHeight: 'var(--lg-button-size, 2.25rem)', boxSizing: 'border-box',
+                  padding: '0 12px', borderRadius: 10, border: '1px solid #d1d5db',
+                  background: 'white', color: '#1d4ed8', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                Show on stage
+              </button>
+              <button
+                onClick={resetCanvas}
+                title="Reset the canvas"
+                style={{
+                  alignSelf: 'stretch', minHeight: 'var(--lg-button-size, 2.25rem)', boxSizing: 'border-box',
+                  padding: '0 12px', borderRadius: 10, border: '1px solid #d1d5db',
+                  background: 'white', color: '#b91c1c', fontSize: 13, fontWeight: 600,
+                }}
+              >
+                Clear
+              </button>
+            </div>
           )}
           UIOptions={{
             welcomeScreen: false,

@@ -114,6 +114,19 @@ const MainStage = () => {
     conn.on('data', (data: any) => {
       try {
         const incomingData = JSON.parse(data);
+        if (incomingData.action === 'show-area' && excalidrawAPI.current) {
+          const { x, y, width, height } = incomingData.rect;
+          const app = excalidrawAPI.current.getAppState();
+          const zoom = Math.min(app.width / width, app.height / height);
+          excalidrawAPI.current.updateScene({
+            appState: {
+              zoom: { value: zoom },
+              scrollX: -x + (app.width / zoom - width) / 2,
+              scrollY: -y + (app.height / zoom - height) / 2,
+            },
+          });
+          return;
+        }
         if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
           const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
           let nextElements: ExcalidrawElement[];
