@@ -54,13 +54,15 @@ const MobileController = () => {
 
   const [fsError, setFsError] = useState('');
   const fsPending = useRef(false);
+  const canFullscreen = !!((document.documentElement as any).requestFullscreen || (document.documentElement as any).webkitRequestFullscreen);
+  const isStandalone = (navigator as any).standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 
   const enterFullscreen = useCallback(() => {
     // touchend, pointerup and click fire together; overlapping requests make Chrome reject the real one.
     if (document.fullscreenElement || fsPending.current) return;
     const el: any = document.documentElement;
     const req = el.requestFullscreen || el.webkitRequestFullscreen;
-    if (!req) { setFsError('Fullscreen not supported'); return; }
+    if (!req) { setFsError('Browser has no fullscreen API. Use "Add to Home Screen" and open from there.'); return; }
     fsPending.current = true;
     Promise.resolve(req.call(el))
       .then(() => {
@@ -91,6 +93,16 @@ const MobileController = () => {
       events.forEach((e) => document.removeEventListener(e, onGesture, true));
     };
   }, [enterFullscreen]);
+
+  useEffect(() => {
+    // The page must be scrollable for iOS Chrome to collapse its toolbars on swipe.
+    document.documentElement.style.overflowY = 'auto';
+    document.body.style.minHeight = 'calc(100dvh + 200px)';
+    document.body.style.overscrollBehavior = 'none';
+    return () => {
+      document.body.style.minHeight = '';
+    };
+  }, []);
 
   const connectToPeer = useCallback((peer: Peer, peerId: string) => {
     console.log(`[Mobile] Attempting connection to: "${peerId}" (attempt ${retryCount.current + 1}/${MAX_RETRIES})`);
@@ -227,11 +239,11 @@ const MobileController = () => {
   return (
     <div
       ref={containerRef}
-      style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', overflow: 'hidden', background: 'white' }}
+      style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', overflow: 'hidden', background: 'white', pointerEvents: 'none' }}
     >
       {!isStarted && (
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 9999,
+          position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'auto',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(17, 24, 39, 0.92)', backdropFilter: 'blur(4px)',
           WebkitBackdropFilter: 'blur(4px)', touchAction: 'manipulation',
@@ -267,20 +279,30 @@ const MobileController = () => {
         {status}
       </div>
 
-      {isStarted && isLandscape && !isFullscreen && (
+      {isStarted && isLandscape && !isFullscreen && !isStandalone && (
         <button
-          onClick={enterFullscreen}
+          onClick={canFullscreen ? enterFullscreen : undefined}
           style={{
             position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 60,
             background: '#2563eb', color: 'white', border: 'none', borderRadius: 999,
             padding: '8px 18px', fontSize: 14, fontWeight: 600, opacity: 0.9,
+            pointerEvents: canFullscreen ? 'auto' : 'none',
           }}
         >
-          {fsError ? `Full screen failed: ${fsError}` : 'Tap for full screen'}
+          {!canFullscreen
+            ? 'For full screen: Share > Add to Home Screen'
+            : fsError ? `Full screen failed: ${fsError}` : 'Tap for full screen'}
         </button>
       )}
 
-      <div style={{ width: '100%', height: '100%' }}>
+      <div style={{
+        position: 'absolute', top: 0, bottom: 0, right: 0, width: 36, background: '#e5e7eb',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+      }}>
+        <div style={{ width: 4, height: 48, borderRadius: 2, background: '#9ca3af' }} />
+      </div>
+
+      <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 36, pointerEvents: 'auto' }}>
         <Excalidraw
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
           onChange={onBoardChange}
