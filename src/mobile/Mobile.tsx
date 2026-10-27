@@ -305,7 +305,7 @@ const MobileController = () => {
               onClick={resetCanvas}
               title="Reset the canvas"
               style={{
-                height: 'calc(var(--lg-button-size, 2.25rem) + 1rem)', boxSizing: 'border-box', padding: '0 12px', borderRadius: 10, border: '1px solid #d1d5db',
+                alignSelf: 'stretch', minHeight: 'var(--lg-button-size, 2.25rem)', boxSizing: 'border-box', padding: '0 12px', borderRadius: 10, border: '1px solid #d1d5db',
                 background: 'white', color: '#b91c1c', fontSize: 13, fontWeight: 600,
               }}
             >
