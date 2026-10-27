@@ -49,6 +49,29 @@ const MobileController = () => {
     }
   }, []);
 
+  const [isLandscape, setIsLandscape] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: landscape)');
+    const enterFullscreen = () => {
+      if (document.fullscreenElement) return;
+      (containerRef.current || document.documentElement).requestFullscreen?.().catch(() => {});
+    };
+    // Chrome only allows fullscreen from a user gesture, so retry on the next touch if rotation alone is refused.
+    const onTouch = () => { if (mq.matches) enterFullscreen(); };
+    const onChange = () => {
+      setIsLandscape(mq.matches);
+      if (mq.matches) enterFullscreen();
+    };
+    setIsLandscape(mq.matches);
+    mq.addEventListener('change', onChange);
+    document.addEventListener('pointerup', onTouch);
+    return () => {
+      mq.removeEventListener('change', onChange);
+      document.removeEventListener('pointerup', onTouch);
+    };
+  }, []);
+
   const connectToPeer = useCallback((peer: Peer, peerId: string) => {
     console.log(`[Mobile] Attempting connection to: "${peerId}" (attempt ${retryCount.current + 1}/${MAX_RETRIES})`);
     setStatus(`Connecting... (${retryCount.current + 1}/${MAX_RETRIES})`);
@@ -202,7 +225,7 @@ const MobileController = () => {
               touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent', userSelect: 'none',
             }}
           >
-            Start Drawing 3!
+            Start Drawing
           </button>
           <p style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.6)', textAlign: 'center', padding: '0 24px' }}>
             Tap to enable full screen mode
@@ -215,6 +238,7 @@ const MobileController = () => {
       )}
 
       <div style={{
+        display: isLandscape ? 'none' : 'block',
         position: 'absolute', top: 8, left: 8, zIndex: 50,
         background: status.includes('✓') ? 'rgba(22,101,52,0.8)' : status.includes('❌') ? 'rgba(153,27,27,0.8)' : 'rgba(0,0,0,0.5)',
         color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 10,
