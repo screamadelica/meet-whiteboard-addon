@@ -30,46 +30,6 @@
 }
 
 
-/* Hide Diamond tool */
-.whiteboard label.ToolIcon[title^="Diamond"] {
-  display: none !important;
-}
-
-/* Hide Rectangle tool */
-.whiteboard label.ToolIcon[title^="Rectangle"] {
-  display: none !important;
-}
-
-/* Hide Ellipse tool */
-.whiteboard label.ToolIcon[title^="Ellipse"] {
-  display: none !important;
-}
-
-/* Hide Arrow tool */
-.whiteboard label.ToolIcon[title^="Arrow"] {
-  display: none !important;
-}
-
-/* Hide Line tool */
-.whiteboard label.ToolIcon[title^="Line"] {
-  display: none !important;
-}
-
-/* Hide Text tool */
-.whiteboard label.ToolIcon[title^="Text"] {
-  display: none !important;
-}
-
-/* Hide Image tool */
-.whiteboard label.ToolIcon[title^="Insert image"] {
-  display: none !important;
-}
-
-/* Hide Select tool */
-.whiteboard label.ToolIcon[title^="Select"] {
-  display: none !important;
-}
-
 /* Hide More tools  tool
 .whiteboard button[data-testid="dropdown-menu-button"] {
   display: none !important;

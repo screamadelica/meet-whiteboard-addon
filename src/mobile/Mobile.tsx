@@ -302,7 +302,7 @@ const MobileController = () => {
         <div style={{ width: 4, height: 48, borderRadius: 2, background: '#9ca3af' }} />
       </div>
 
-      <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 36, pointerEvents: 'auto' }}>
+      <div className="whiteboard" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 36, width: 'auto', height: 'auto', pointerEvents: 'auto' }}>
         <Excalidraw
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
           onChange={onBoardChange}
