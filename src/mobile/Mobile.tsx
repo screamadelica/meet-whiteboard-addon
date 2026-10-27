@@ -52,14 +52,23 @@ const MobileController = () => {
   const [isLandscape, setIsLandscape] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  const [fsError, setFsError] = useState('');
+  const fsPending = useRef(false);
+
   const enterFullscreen = useCallback(() => {
-    if (document.fullscreenElement) return;
+    // touchend, pointerup and click fire together; overlapping requests make Chrome reject the real one.
+    if (document.fullscreenElement || fsPending.current) return;
     const el: any = document.documentElement;
     const req = el.requestFullscreen || el.webkitRequestFullscreen;
-    // Lock keeps landscape once fullscreen; it is only permitted while fullscreen.
-    Promise.resolve(req?.call(el, { navigationUI: 'hide' }))
-      .then(() => (screen.orientation as any)?.lock?.('landscape')?.catch(() => {}))
-      .catch(() => {});
+    if (!req) { setFsError('Fullscreen not supported'); return; }
+    fsPending.current = true;
+    Promise.resolve(req.call(el))
+      .then(() => {
+        setFsError('');
+        (screen.orientation as any)?.lock?.('landscape')?.catch(() => {});
+      })
+      .catch((e: any) => setFsError(String(e?.message || e)))
+      .finally(() => { fsPending.current = false; });
   }, []);
 
   useEffect(() => {
@@ -267,7 +276,7 @@ const MobileController = () => {
             padding: '8px 18px', fontSize: 14, fontWeight: 600, opacity: 0.9,
           }}
         >
-          Tap for full screen
+          {fsError ? `Full screen failed: ${fsError}` : 'Tap for full screen'}
         </button>
       )}
 
