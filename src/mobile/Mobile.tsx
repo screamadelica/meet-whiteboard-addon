@@ -236,6 +236,14 @@ const MobileController = () => {
     }
   }, 50), []);
 
+  const resetCanvas = useCallback(() => {
+    excalidrawAPI.current?.resetScene();
+    versionMap.current.clear();
+    // A full (non-diff) empty scene is the only way to clear the main stage.
+    connectionRef.current?.open &&
+      connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements: [], isDiff: false }));
+  }, []);
+
   return (
     <div
       ref={containerRef}
@@ -279,22 +287,6 @@ const MobileController = () => {
         {status}
       </div>
 
-      {isStarted && isLandscape && !isFullscreen && !isStandalone && (
-        <button
-          onClick={canFullscreen ? enterFullscreen : undefined}
-          style={{
-            position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 60,
-            background: '#2563eb', color: 'white', border: 'none', borderRadius: 999,
-            padding: '8px 18px', fontSize: 14, fontWeight: 600, opacity: 0.9,
-            pointerEvents: canFullscreen ? 'auto' : 'none',
-          }}
-        >
-          {!canFullscreen
-            ? 'For full screen: Share > Add to Home Screen'
-            : fsError ? `Full screen failed: ${fsError}` : 'Tap for full screen'}
-        </button>
-      )}
-
       <div style={{
         position: 'absolute', top: 0, bottom: 0, right: 0, width: 36, background: '#e5e7eb',
         display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
@@ -306,6 +298,18 @@ const MobileController = () => {
         <Excalidraw
           excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
           onChange={onBoardChange}
+          renderTopRightUI={() => (
+            <button
+              onClick={resetCanvas}
+              title="Reset the canvas"
+              style={{
+                height: 36, padding: '0 12px', borderRadius: 10, border: '1px solid #d1d5db',
+                background: 'white', color: '#b91c1c', fontSize: 13, fontWeight: 600,
+              }}
+            >
+              Reset
+            </button>
+          )}
           UIOptions={{
             welcomeScreen: false,
             canvasActions: { toggleTheme: false, export: false, loadScene: false, changeViewBackgroundColor: false }
