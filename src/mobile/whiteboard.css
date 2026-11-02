@@ -26,6 +26,11 @@
 }
 */
 
+/* Hide the hamburger menu */
+.whiteboard .main-menu-trigger {
+  display: none !important;
+}
+
 /* Remove library/shapes sidebar */
 .whiteboard .library-sidebar,
 .whiteboard .library-sidebar-divider {
