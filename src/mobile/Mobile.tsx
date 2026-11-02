@@ -244,6 +244,7 @@ const MobileController = () => {
 
   const resetCanvas = useCallback(() => {
     excalidrawAPI.current?.resetScene();
+    excalidrawAPI.current?.setActiveTool({ type: 'freedraw' });
     versionMap.current.clear();
     // A full (non-diff) empty scene is the only way to clear the main stage.
     connectionRef.current?.open &&
@@ -313,7 +314,10 @@ const MobileController = () => {
 
       <div className="whiteboard" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: isLandscape ? 36 : 0, width: 'auto', height: 'auto', pointerEvents: 'auto' }}>
         <Excalidraw
-          excalidrawAPI={(api) => { excalidrawAPI.current = api; }}
+          excalidrawAPI={(api) => {
+            if (api && excalidrawAPI.current !== api) api.setActiveTool({ type: 'freedraw' });
+            excalidrawAPI.current = api;
+          }}
           onChange={(elements, appState) => {
             onBoardChange(elements);
             const next = { scrollX: appState.scrollX, scrollY: appState.scrollY, zoom: appState.zoom.value };
