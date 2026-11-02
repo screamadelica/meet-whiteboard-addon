@@ -131,8 +131,8 @@ const MainStage = () => {
             remotePointers.current.set(conn.peer, {
               pointer: incomingData.pointer,
               button: incomingData.button,
-              username: 'Phone',
-              color: { background: '#ef4444', stroke: '#b91c1c' },
+              username: null,
+              color: { background: '#ff0000', stroke: '#ff0000' },
             });
           } else {
             remotePointers.current.delete(conn.peer);
