@@ -14,6 +14,7 @@ const MobileController = () => {
   const excalidrawAPI = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
   const versionMap = useRef(new Map<string, number>());
+  const sentElements = useRef(new Map<string, ExcalidrawElement>());
   const connectionRef = useRef<DataConnection | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const retryCount = useRef(0);
@@ -237,6 +238,14 @@ const MobileController = () => {
   const onBoardChange = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
     if (isRemoteUpdate.current || !connectionRef.current?.open) return;
     const updates = elements.filter((el) => (versionMap.current.get(el.id) || -1) < el.version);
+    updates.forEach((el) => sentElements.current.set(el.id, el));
+    // A pinch cancels the stroke it started and drops it from the scene without marking it deleted.
+    const present = new Set(elements.map((el) => el.id));
+    sentElements.current.forEach((el, id) => {
+      if (present.has(id)) return;
+      sentElements.current.delete(id);
+      updates.push({ ...el, isDeleted: true, version: el.version + 1, versionNonce: el.versionNonce + 1 });
+    });
     if (updates.length > 0) {
       updates.forEach((el) => versionMap.current.set(el.id, el.version));
       connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements: updates, isDiff: true }));
@@ -247,6 +256,7 @@ const MobileController = () => {
     excalidrawAPI.current?.resetScene();
     excalidrawAPI.current?.setActiveTool({ type: 'freedraw' });
     versionMap.current.clear();
+    sentElements.current.clear();
     // A full (non-diff) empty scene is the only way to clear the main stage.
     connectionRef.current?.open &&
       connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements: [], isDiff: false }));
