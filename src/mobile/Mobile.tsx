@@ -52,6 +52,7 @@ const MobileController = () => {
   const [isLandscape, setIsLandscape] = useState(false);
   const [stageRect, setStageRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [view, setView] = useState({ scrollX: 0, scrollY: 0, zoom: 1 });
+  const [isHand, setIsHand] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [fsError, setFsError] = useState('');
@@ -322,9 +323,26 @@ const MobileController = () => {
             onBoardChange(elements);
             const next = { scrollX: appState.scrollX, scrollY: appState.scrollY, zoom: appState.zoom.value };
             setView((v) => (v.scrollX === next.scrollX && v.scrollY === next.scrollY && v.zoom === next.zoom ? v : next));
+            setIsHand(appState.activeTool.type === 'hand');
           }}
           renderTopRightUI={() => (
             <div style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
+              <button
+                onClick={() => excalidrawAPI.current?.setActiveTool({ type: isHand ? 'freedraw' : 'hand' })}
+                title="Hand tool (pan)"
+                aria-label="Hand tool"
+                style={{
+                  alignSelf: 'stretch', width: 'var(--lg-button-size, 2.25rem)', minHeight: 'var(--lg-button-size, 2.25rem)',
+                  boxSizing: 'border-box', padding: 0, borderRadius: 10, border: '1px solid #d1d5db',
+                  background: isHand ? '#4f46e5' : 'white', color: isHand ? 'white' : '#111827',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8" />
+                  <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-5.9-2.4L3.4 16a2 2 0 0 1 3.2-2.4L8 15" />
+                </svg>
+              </button>
               <button
                 onClick={showOnStage}
                 title="Show this area on the main stage"
