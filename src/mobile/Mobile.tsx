@@ -252,6 +252,21 @@ const MobileController = () => {
     }
   }, 50), []);
 
+  const wasLaser = useRef(false);
+  const onPointerUpdate = useMemo(() => throttle((payload: { pointer: { x: number; y: number; tool: string }; button: string }) => {
+    const conn = connectionRef.current;
+    if (!conn?.open) return;
+    const isLaser = payload.pointer.tool === 'laser';
+    // Hide the stage's laser once the phone leaves the laser tool.
+    if (!isLaser && !wasLaser.current) return;
+    wasLaser.current = isLaser;
+    conn.send(JSON.stringify({
+      action: 'laser',
+      pointer: isLaser ? payload.pointer : null,
+      button: payload.button,
+    }));
+  }, 30), []);
+
   const resetCanvas = useCallback(() => {
     excalidrawAPI.current?.resetScene();
     excalidrawAPI.current?.setActiveTool({ type: 'freedraw' });
@@ -385,6 +400,7 @@ const MobileController = () => {
               </button>
             </div>
           )}
+          onPointerUpdate={onPointerUpdate}
           UIOptions={{
             welcomeScreen: false,
             canvasActions: { toggleTheme: false, export: false, loadScene: false, changeViewBackgroundColor: false }

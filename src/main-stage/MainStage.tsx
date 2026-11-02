@@ -31,6 +31,7 @@ const MainStage = () => {
   const mainStageClient = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
   const lastSentVersionMap = useRef(new Map<string, number>());
+  const remotePointers = useRef(new Map<string, any>());
 
   // If peer opens before SDK is ready, store the notification here and flush it when SDK is ready
   const pendingNotification = useRef<{ peerId: string; pinValue: string } | null>(null);
@@ -125,6 +126,20 @@ const MainStage = () => {
     conn.on('data', (data: any) => {
       try {
         const incomingData = JSON.parse(data);
+        if (incomingData.action === 'laser' && excalidrawAPI.current) {
+          if (incomingData.pointer) {
+            remotePointers.current.set(conn.peer, {
+              pointer: incomingData.pointer,
+              button: incomingData.button,
+              username: 'Phone',
+              color: { background: '#ef4444', stroke: '#b91c1c' },
+            });
+          } else {
+            remotePointers.current.delete(conn.peer);
+          }
+          excalidrawAPI.current.updateScene({ collaborators: new Map(remotePointers.current) });
+          return;
+        }
         if (incomingData.action === 'show-area' && excalidrawAPI.current) {
           const { x, y, width, height } = incomingData.rect;
           const app = excalidrawAPI.current.getAppState();
@@ -167,6 +182,8 @@ const MainStage = () => {
     conn.on('close', () => {
       console.log('[MainStage] Connection closed:', conn.peer);
       setActiveConnections(prev => prev.filter(c => c.peer !== conn.peer));
+      remotePointers.current.delete(conn.peer);
+      excalidrawAPI.current?.updateScene({ collaborators: new Map(remotePointers.current) });
     });
 
     conn.on('error', (err) => {
