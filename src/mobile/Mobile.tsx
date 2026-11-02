@@ -324,24 +324,32 @@ const MobileController = () => {
               <button
                 onClick={showOnStage}
                 title="Show this area on the main stage"
+                aria-label="Show on stage"
                 style={{
-                  alignSelf: 'stretch', minHeight: 'var(--lg-button-size, 2.25rem)', boxSizing: 'border-box',
-                  padding: '0 12px', borderRadius: 10, border: '1px solid #d1d5db',
-                  background: 'white', color: '#1d4ed8', fontSize: 13, fontWeight: 600,
+                  alignSelf: 'stretch', width: 'var(--lg-button-size, 2.25rem)', minHeight: 'var(--lg-button-size, 2.25rem)',
+                  boxSizing: 'border-box', padding: 0, borderRadius: 10, border: '1px solid #d1d5db',
+                  background: 'white', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                Show on stage
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="13" rx="2" />
+                  <path d="M8 21h8M12 17v4" />
+                  <path d="M12 13V8M9.5 10.5L12 8l2.5 2.5" />
+                </svg>
               </button>
               <button
                 onClick={resetCanvas}
                 title="Reset the canvas"
+                aria-label="Clear canvas"
                 style={{
-                  alignSelf: 'stretch', minHeight: 'var(--lg-button-size, 2.25rem)', boxSizing: 'border-box',
-                  padding: '0 12px', borderRadius: 10, border: '1px solid #d1d5db',
-                  background: 'white', color: '#b91c1c', fontSize: 13, fontWeight: 600,
+                  alignSelf: 'stretch', width: 'var(--lg-button-size, 2.25rem)', minHeight: 'var(--lg-button-size, 2.25rem)',
+                  boxSizing: 'border-box', padding: 0, borderRadius: 10, border: '1px solid #d1d5db',
+                  background: 'white', color: '#b91c1c', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                Clear
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v5M14 11v5" />
+                </svg>
               </button>
             </div>
           )}
