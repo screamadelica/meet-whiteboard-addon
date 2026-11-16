@@ -5,6 +5,7 @@ import Peer, { DataConnection } from 'peerjs';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import throttle from 'lodash.throttle';
 import { joinPrivateBoardChannel, redeemRealtimeInvite, sendPrivateBoardMessage } from '../realtime/supabase';
+import { createBoardMessage, createClientId, MessageDeduplicator, normalizeBoardMessage } from '../realtime/protocol';
 import "./whiteboard.css";
 
 const MAX_RETRIES = 5;
@@ -25,6 +26,8 @@ const MobileController = () => {
   const realtimeChannel = useRef<RealtimeChannel | null>(null);
   const realtimeAvailable = useRef(false);
   const realtimeReady = useRef(false);
+  const clientId = useRef(createClientId());
+  const seenMessages = useRef(new MessageDeduplicator());
 
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
@@ -119,9 +122,16 @@ const MobileController = () => {
   const activateRealtimeFallback = useCallback(async () => {
     const channel = realtimeChannel.current;
     if (!realtimeAvailable.current || !channel) return false;
-    const sendStatus = await sendPrivateBoardMessage(channel, { action: 'transport-fallback' });
+    if (connectionRef.current?.open) return false;
+    const message = createBoardMessage(clientId.current, { action: 'transport-fallback' });
+    seenMessages.current.accept(message.messageId);
+    const sendStatus = await sendPrivateBoardMessage(channel, message);
     if (sendStatus !== 'ok') {
       setRealtimeStatus(`Realtime fallback activation failed (${sendStatus})`);
+      return false;
+    }
+    if (connectionRef.current?.open) {
+      realtimeReady.current = false;
       return false;
     }
     realtimeReady.current = true;
@@ -129,47 +139,62 @@ const MobileController = () => {
     return true;
   }, []);
 
-  const sendMobileMessage = useCallback((message: any) => {
+  const sendMobileMessage = useCallback((payload: Record<string, unknown>) => {
+    const message = createBoardMessage(clientId.current, payload);
+    seenMessages.current.accept(message.messageId);
     const serialized = JSON.stringify(message);
     const channel = realtimeChannel.current;
-    if (realtimeReady.current && channel) {
-      void sendPrivateBoardMessage(channel, message).then((sendStatus) => {
-        if (sendStatus === 'ok') return;
-        if (connectionRef.current?.open) {
-          realtimeReady.current = false;
-          setRealtimeStatus(`Realtime failed (${sendStatus}); PeerJS active`);
-          connectionRef.current.send(JSON.stringify({ action: 'transport-peerjs' }));
-          connectionRef.current.send(serialized);
-        } else {
-          setRealtimeStatus(`Realtime send failed (${sendStatus}); waiting for PeerJS`);
-        }
-      }).catch((error) => {
-        console.error('[Mobile] Realtime send failed:', error);
-        if (connectionRef.current?.open) {
-          realtimeReady.current = false;
-          setRealtimeStatus('Realtime failed; PeerJS active');
-          connectionRef.current.send(JSON.stringify({ action: 'transport-peerjs' }));
-          connectionRef.current.send(serialized);
-        } else {
-          setRealtimeStatus('Realtime send failed; waiting for PeerJS');
-        }
-      });
-      return;
-    }
     if (connectionRef.current?.open) {
       connectionRef.current.send(serialized);
       return;
     }
+    if (realtimeReady.current && channel) {
+      void sendPrivateBoardMessage(channel, message).then((sendStatus) => {
+        if (sendStatus === 'ok') return;
+        realtimeReady.current = false;
+        setRealtimeStatus(`Realtime send failed (${sendStatus}); waiting for PeerJS`);
+      }).catch((error) => {
+        console.error('[Mobile] Realtime send failed:', error);
+        realtimeReady.current = false;
+        setRealtimeStatus('Realtime send failed; waiting for PeerJS');
+      });
+      return;
+    }
     if (realtimeAvailable.current) {
       void activateRealtimeFallback().then((activated) => {
-        if (activated) void sendPrivateBoardMessage(channel!, message);
+        if (activated && !connectionRef.current?.open) void sendPrivateBoardMessage(channel!, message);
+        else if (connectionRef.current?.open) connectionRef.current.send(serialized);
       });
     }
   }, [activateRealtimeFallback]);
 
   const applyIncomingMessage = useCallback((incomingData: any) => {
+    const message = normalizeBoardMessage(incomingData, 'stage:legacy');
+    if (!message || (message.targetClientId && message.targetClientId !== clientId.current)) return;
+    if (!seenMessages.current.accept(message.messageId)) return;
+
+    if (message.action === 'transport-peerjs') {
+      realtimeReady.current = false;
+      setRealtimeStatus('PeerJS active; Realtime ready');
+      return;
+    }
     if (incomingData.action === 'stage-view') {
       setStageRect(incomingData.rect);
+      return;
+    }
+    if (incomingData.action === 'laser' && excalidrawAPI.current) {
+      const collaborators = new Map(excalidrawAPI.current.getAppState().collaborators);
+      if (incomingData.pointer) {
+        collaborators.set(message.senderId, {
+          pointer: incomingData.pointer,
+          button: incomingData.button,
+          username: null,
+          color: { background: '#ff0000', stroke: '#ff0000' },
+        });
+      } else {
+        collaborators.delete(message.senderId);
+      }
+      excalidrawAPI.current.updateScene({ collaborators });
       return;
     }
     if (incomingData.action !== 'scene-update' || !excalidrawAPI.current) return;
@@ -217,20 +242,19 @@ const MobileController = () => {
     conn.on('open', () => {
       clearTimeout(timeout);
       retryCount.current = 0;
+      realtimeReady.current = false;
       console.log('[Mobile] ✓ Connection opened with:', peerId);
       setStatus("Connected ✓");
+      setRealtimeStatus(realtimeAvailable.current ? 'PeerJS active; Realtime ready' : 'PeerJS active');
+      const registration = createBoardMessage(clientId.current, { action: 'transport-peerjs' });
+      seenMessages.current.accept(registration.messageId);
+      conn.send(JSON.stringify(registration));
     });
 
     conn.on('data', (data: any) => {
       console.log('[Mobile] Data received, length:', String(data).length);
       try {
-        const message = JSON.parse(data);
-        if (message.action === 'transport-peerjs') {
-          realtimeReady.current = false;
-          setRealtimeStatus('PeerJS active; Realtime ready');
-          return;
-        }
-        applyIncomingMessage(message);
+        applyIncomingMessage(JSON.parse(data));
       } catch (e) { console.error('[Mobile] Parse error:', e); }
     });
 

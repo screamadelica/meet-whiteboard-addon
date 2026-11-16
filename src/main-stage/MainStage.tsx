@@ -6,6 +6,7 @@ import Peer, { DataConnection } from 'peerjs';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import throttle from 'lodash.throttle';
 import { createRealtimeSession, joinPrivateBoardChannel, sendPrivateBoardMessage } from '../realtime/supabase';
+import { createBoardMessage, createClientId, MessageDeduplicator, normalizeBoardMessage, type BoardMessage } from '../realtime/protocol';
 import "./whiteboard.css";
 
 const PREFIX = "meetboard-xyz-";
@@ -35,8 +36,10 @@ const MainStage = () => {
   const lastSentVersionMap = useRef(new Map<string, number>());
   const remotePointers = useRef(new Map<string, any>());
   const realtimeChannel = useRef<RealtimeChannel | null>(null);
-  const realtimeReady = useRef(false);
   const activeConnectionsRef = useRef<DataConnection[]>([]);
+  const realtimeClients = useRef(new Set<string>());
+  const stageClientId = useRef(createClientId());
+  const seenMessages = useRef(new MessageDeduplicator());
 
   // If peer opens before SDK is ready, store the notification here and flush it when SDK is ready
   const pendingNotification = useRef<{
@@ -101,39 +104,22 @@ const MainStage = () => {
   }, [sdkReady]);
 
   // --- 2. Throttled Broadcast ---
-  const sendStageMessage = (message: any) => {
+  const sendStageMessage = (payload: Record<string, unknown>, targetClientId?: string) => {
+    const message = createBoardMessage(stageClientId.current, { ...payload, ...(targetClientId ? { targetClientId } : {}) });
+    seenMessages.current.accept(message.messageId);
     const connections = activeConnectionsRef.current;
     const channel = realtimeChannel.current;
-    if (realtimeReady.current && channel) {
-      void sendPrivateBoardMessage(channel, message).then((status) => {
-        if (status === 'ok') return;
-        console.warn('[MainStage] Realtime send failed; switching back to PeerJS:', status);
-        realtimeReady.current = false;
-        const serialized = JSON.stringify(message);
-        connections.forEach((conn) => {
-          if (!conn.open) return;
-          conn.send(JSON.stringify({ action: 'transport-peerjs' }));
-          conn.send(serialized);
-        });
-      }).catch((error) => {
-        console.warn('[MainStage] Realtime send failed; switching back to PeerJS:', error);
-        realtimeReady.current = false;
-        const serialized = JSON.stringify(message);
-        connections.forEach((conn) => {
-          if (!conn.open) return;
-          conn.send(JSON.stringify({ action: 'transport-peerjs' }));
-          conn.send(serialized);
-        });
-      });
-      return;
-    }
-
     const serialized = JSON.stringify(message);
     connections.forEach((conn) => { if (conn.open) conn.send(serialized); });
+    if (channel && realtimeClients.current.size > 0) {
+      void sendPrivateBoardMessage(channel, message).then((status) => {
+        if (status !== 'ok') console.warn('[MainStage] Realtime fallback broadcast failed:', status);
+      }).catch((error) => console.warn('[MainStage] Realtime fallback broadcast failed:', error));
+    }
   };
 
   const throttledBroadcast = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
-    if (isRemoteUpdate.current || (activeConnections.length === 0 && !realtimeReady.current)) return;
+    if (isRemoteUpdate.current || (activeConnections.length === 0 && realtimeClients.current.size === 0)) return;
     const updates = elements.filter(el => el.version > (lastSentVersionMap.current.get(el.id) || -1));
     if (updates.length === 0) return;
     sendStageMessage({ action: 'scene-update', elements: updates, isDiff: true });
@@ -147,40 +133,20 @@ const MainStage = () => {
   });
 
   const throttledViewBroadcast = useMemo(() => throttle((app: any) => {
-    if (activeConnections.length > 0 || realtimeReady.current) sendStageMessage(viewMessage(app));
+    if (activeConnections.length > 0 || realtimeClients.current.size > 0) sendStageMessage(viewMessage(app));
   }, 100), [activeConnections]);
 
-  const handleRealtimeMessage = (message: any) => {
-    if (message.action === 'transport-fallback') {
-      realtimeReady.current = true;
-      console.log('[MainStage] Mobile switched to Supabase Realtime');
-      if (excalidrawAPI.current) {
-        sendStageMessage(viewMessage(excalidrawAPI.current.getAppState()));
-        sendStageMessage({
-          action: 'scene-update',
-          elements: excalidrawAPI.current.getSceneElements(),
-          isDiff: false,
-        });
-      }
-      return;
-    }
-
-    if (message.action === 'transport-peerjs') {
-      realtimeReady.current = false;
-      console.log('[MainStage] Mobile returned to PeerJS');
-      return;
-    }
-
+  const applyStageMessage = (message: BoardMessage) => {
     if (message.action === 'laser' && excalidrawAPI.current) {
       if (message.pointer) {
-        remotePointers.current.set('mobile-realtime', {
+        remotePointers.current.set(message.senderId, {
           pointer: message.pointer,
           button: message.button,
           username: null,
           color: { background: '#ff0000', stroke: '#ff0000' },
         });
       } else {
-        remotePointers.current.delete('mobile-realtime');
+        remotePointers.current.delete(message.senderId);
       }
       excalidrawAPI.current.updateScene({ collaborators: new Map(remotePointers.current) });
       return;
@@ -220,6 +186,69 @@ const MainStage = () => {
     }
   };
 
+  const handleRealtimeMessage = (rawMessage: Record<string, unknown>) => {
+    const payload = normalizeBoardMessage(rawMessage, 'realtime:legacy');
+    if (!payload) return;
+    if (!seenMessages.current.accept(payload.messageId)) return;
+    if (payload.action === 'transport-fallback') {
+      realtimeClients.current.add(payload.senderId);
+      if (excalidrawAPI.current && realtimeChannel.current) {
+        sendStageMessage(viewMessage(excalidrawAPI.current.getAppState()), payload.senderId);
+        sendStageMessage({
+          action: 'scene-update',
+          elements: excalidrawAPI.current.getSceneElements(),
+          isDiff: false,
+        }, payload.senderId);
+      }
+      console.log('[MainStage] Mobile using Realtime fallback:', payload.senderId);
+      return;
+    }
+
+    if (payload.action === 'transport-peerjs') {
+      realtimeClients.current.delete(payload.senderId);
+      console.log('[MainStage] Mobile using PeerJS:', payload.senderId);
+      return;
+    }
+
+    applyStageMessage(payload);
+    const serialized = JSON.stringify(payload);
+    activeConnectionsRef.current.forEach((conn) => { if (conn.open) conn.send(serialized); });
+  };
+
+  const handlePeerMessage = (rawMessage: Record<string, unknown>, conn: DataConnection) => {
+    const message = normalizeBoardMessage(rawMessage, `peer:${conn.peer}`);
+    if (!message || !seenMessages.current.accept(message.messageId)) return;
+
+    if (message.action === 'transport-peerjs') {
+      realtimeClients.current.delete(message.senderId);
+      if (excalidrawAPI.current) {
+        sendStageMessage(viewMessage(excalidrawAPI.current.getAppState()), message.senderId);
+        sendStageMessage({
+          action: 'scene-update',
+          elements: excalidrawAPI.current.getSceneElements(),
+          isDiff: false,
+        }, message.senderId);
+      }
+      return;
+    }
+
+    if (message.action === 'transport-fallback') {
+      realtimeClients.current.add(message.senderId);
+      return;
+    }
+
+    applyStageMessage(message);
+    const serialized = JSON.stringify(message);
+    activeConnectionsRef.current.forEach((otherConn) => {
+      if (otherConn.open && otherConn !== conn) otherConn.send(serialized);
+    });
+    if (realtimeChannel.current && realtimeClients.current.size > 0) {
+      void sendPrivateBoardMessage(realtimeChannel.current, message).then((status) => {
+        if (status !== 'ok') console.warn('[MainStage] Realtime relay failed:', status);
+      });
+    }
+  };
+
   const setupConnection = (conn: DataConnection) => {
     console.log('[MainStage] Incoming connection from peer:', conn.peer);
     conn.on('open', () => {
@@ -229,77 +258,11 @@ const MainStage = () => {
         activeConnectionsRef.current = next;
         return next;
       });
-      if (excalidrawAPI.current && !realtimeReady.current) {
-        conn.send(viewMessage(excalidrawAPI.current.getAppState()));
-        conn.send(JSON.stringify({ 
-          action: 'scene-update', 
-          elements: excalidrawAPI.current.getSceneElements(),
-          isDiff: false 
-        }));
-      }
     });
 
     conn.on('data', (data: any) => {
       try {
-        const incomingData = JSON.parse(data);
-        if (incomingData.action === 'transport-fallback') {
-          realtimeReady.current = false;
-          remotePointers.current.delete('mobile-realtime');
-          excalidrawAPI.current?.updateScene({ collaborators: new Map(remotePointers.current) });
-          return;
-        }
-        if (incomingData.action === 'transport-peerjs') {
-          realtimeReady.current = false;
-          return;
-        }
-        if (incomingData.action === 'laser' && excalidrawAPI.current) {
-          if (incomingData.pointer) {
-            remotePointers.current.set(conn.peer, {
-              pointer: incomingData.pointer,
-              button: incomingData.button,
-              username: null,
-              color: { background: '#ff0000', stroke: '#ff0000' },
-            });
-          } else {
-            remotePointers.current.delete(conn.peer);
-          }
-          excalidrawAPI.current.updateScene({ collaborators: new Map(remotePointers.current) });
-          return;
-        }
-        if (incomingData.action === 'show-area' && excalidrawAPI.current) {
-          const { x, y, width, height } = incomingData.rect;
-          const app = excalidrawAPI.current.getAppState();
-          const zoom = Math.min(app.width / width, app.height / height);
-          excalidrawAPI.current.updateScene({
-            appState: {
-              zoom: { value: zoom },
-              scrollX: -x + (app.width / zoom - width) / 2,
-              scrollY: -y + (app.height / zoom - height) / 2,
-            },
-          });
-          return;
-        }
-        if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
-          const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
-          let nextElements: ExcalidrawElement[];
-          if (incomingData.isDiff) {
-            const map = new Map<string, ExcalidrawElement>(currentElements.map((e) => [e.id, e]));
-            (incomingData.elements as ExcalidrawElement[]).forEach((remoteEl) => {
-              const localEl = map.get(remoteEl.id);
-              if (!localEl || remoteEl.version > localEl.version) map.set(remoteEl.id, remoteEl);
-            });
-            nextElements = Array.from(map.values());
-          } else {
-            nextElements = incomingData.elements;
-          }
-          isRemoteUpdate.current = true;
-          excalidrawAPI.current.updateScene({ elements: nextElements });
-          nextElements.forEach((el) => lastSentVersionMap.current.set(el.id, el.version));
-          activeConnections.forEach(otherConn => {
-            if (otherConn.open && otherConn.peer !== conn.peer) otherConn.send(data);
-          });
-          setTimeout(() => { isRemoteUpdate.current = false; }, 100);
-        }
+        handlePeerMessage(JSON.parse(data), conn);
       } catch (e) {
         console.error('[MainStage] Data parse error:', e);
       }
@@ -341,7 +304,7 @@ const MainStage = () => {
     try {
       await realtimeChannel.current?.unsubscribe();
       realtimeChannel.current = null;
-      realtimeReady.current = false;
+      realtimeClients.current.clear();
       const session = await createRealtimeSession();
       realtimeChannel.current = await joinPrivateBoardChannel(session.channelName, (message) => {
         if (message.action === 'realtime-probe') {
