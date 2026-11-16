@@ -351,6 +351,7 @@ const MainStage = () => {
     peer.on('open', async (id) => {
       console.log('[MainStage] ✓ Peer open with ID:', id);
       console.log('[MainStage] mainStageClient available now?', !!mainStageClient.current);
+      excalidrawAPI.current?.setActiveTool({ type: 'freedraw' });
       setPeerReady(true);
       await notifySidePanel(id, newPin, realtimeInvite);
     });
@@ -389,7 +390,10 @@ const MainStage = () => {
       <div className="relative flex-1">
         <div className={`whiteboard h-full ${showStyles ? "" : "hide-style-panel"}`}>
           <Excalidraw 
-            excalidrawAPI={(api) => (excalidrawAPI.current = api)}
+            excalidrawAPI={(api) => {
+              excalidrawAPI.current = api;
+              api.setActiveTool({ type: 'freedraw' });
+            }}
             onChange={(elements, appState) => {
               setIsDrawTool(appState.activeTool.type === "freedraw");
               throttledBroadcast(elements);
