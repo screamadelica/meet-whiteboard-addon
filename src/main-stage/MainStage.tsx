@@ -444,16 +444,6 @@ const MainStage = () => {
             }}
             renderTopRightUI={() => (
               <div ref={toolbarControlsRef} className="main-stage-toolbar-controls">
-                {isDrawTool && (
-                  <button
-                    className="ToolIcon_type_button"
-                    title="Toggle style panel"
-                    aria-label="Toggle style panel"
-                    onClick={() => setShowStyles(v => !v)}
-                  >
-                    🎨
-                  </button>
-                )}
                 <button
                   type="button"
                   className={`ToolIcon ToolIcon_type_button main-stage-laser-button${isLaserTool ? ' ToolIcon--selected' : ''}`}
@@ -467,6 +457,16 @@ const MainStage = () => {
                     <path d="M14 4V2M19 7l2-1M17 3l1-2" />
                   </svg>
                 </button>
+                {isDrawTool && (
+                  <button
+                    className="ToolIcon_type_button"
+                    title="Toggle style panel"
+                    aria-label="Toggle style panel"
+                    onClick={() => setShowStyles(v => !v)}
+                  >
+                    🎨
+                  </button>
+                )}
               </div>
             )}
           />
