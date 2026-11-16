@@ -5,7 +5,7 @@ import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/typ
 import Peer, { DataConnection } from 'peerjs';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import throttle from 'lodash.throttle';
-import { createRealtimeSession, joinPrivateBoardChannel } from '../realtime/supabase';
+import { createRealtimeSession, joinPrivateBoardChannel, sendPrivateBoardMessage } from '../realtime/supabase';
 import "./whiteboard.css";
 
 const PREFIX = "meetboard-xyz-";
@@ -223,7 +223,14 @@ const MainStage = () => {
       await realtimeChannel.current?.unsubscribe();
       realtimeChannel.current = null;
       const session = await createRealtimeSession();
-      realtimeChannel.current = await joinPrivateBoardChannel(session.channelName);
+      realtimeChannel.current = await joinPrivateBoardChannel(session.channelName, (message) => {
+        if (message.action === 'realtime-probe') {
+          void sendPrivateBoardMessage(realtimeChannel.current!, { action: 'realtime-probe-ack' })
+            .then((status) => {
+              if (status !== 'ok') console.error('[MainStage] Realtime probe acknowledgment failed:', status);
+            });
+        }
+      });
       realtimeInvite = { boardId: session.boardId, inviteToken: session.participantInviteToken };
       console.log('[MainStage] Private Supabase channel ready');
     } catch (error) {

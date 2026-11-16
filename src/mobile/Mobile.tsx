@@ -4,7 +4,7 @@ import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/typ
 import Peer, { DataConnection } from 'peerjs';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import throttle from 'lodash.throttle';
-import { joinPrivateBoardChannel, redeemRealtimeInvite } from '../realtime/supabase';
+import { joinPrivateBoardChannel, redeemRealtimeInvite, sendPrivateBoardMessage } from '../realtime/supabase';
 import "./whiteboard.css";
 
 const MAX_RETRIES = 5;
@@ -201,9 +201,24 @@ const MobileController = () => {
         if (targetBoardId && inviteToken) {
           try {
             const board = await redeemRealtimeInvite(targetBoardId, inviteToken);
-            realtimeChannel.current = await joinPrivateBoardChannel(board.channelName);
-            setRealtimeStatus('Private channel ready');
-            console.log('[Mobile] Private Supabase channel ready');
+            let probeTimeout: number | undefined;
+            const channel = await joinPrivateBoardChannel(board.channelName, (message) => {
+              if (message.action === 'realtime-probe-ack') {
+                if (probeTimeout) window.clearTimeout(probeTimeout);
+                setRealtimeStatus('Realtime broadcast verified');
+                console.log('[Mobile] Supabase Broadcast probe verified');
+              }
+            });
+            realtimeChannel.current = channel;
+            setRealtimeStatus('Testing private Broadcast...');
+            probeTimeout = window.setTimeout(() => {
+              setRealtimeStatus('Broadcast response timed out');
+            }, 5000);
+            const sendStatus = await sendPrivateBoardMessage(channel, { action: 'realtime-probe' });
+            if (sendStatus !== 'ok') {
+              window.clearTimeout(probeTimeout);
+              setRealtimeStatus(`Broadcast send ${sendStatus}`);
+            }
           } catch (error) {
             setRealtimeStatus('Private channel unavailable');
             console.error('[Mobile] Private Supabase setup failed; PeerJS remains available:', error);
@@ -352,7 +367,11 @@ const MobileController = () => {
           display: isLandscape ? 'none' : 'block',
           position: 'absolute', top: 30, left: 8, zIndex: 50,
           color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 10,
-          background: realtimeStatus === 'Private channel ready' ? 'rgba(0,128,100,0.8)' : 'rgba(153,27,27,0.8)',
+          background: realtimeStatus === 'Realtime broadcast verified'
+            ? 'rgba(0,128,100,0.8)'
+            : realtimeStatus.startsWith('Testing')
+              ? 'rgba(161,98,7,0.85)'
+              : 'rgba(153,27,27,0.8)',
           pointerEvents: 'none',
         }}>
           {realtimeStatus}

@@ -63,10 +63,27 @@ export function redeemRealtimeInvite(boardId: string, inviteToken: string) {
   return postAuthenticated('/api/redeem-realtime-invite', { boardId, inviteToken });
 }
 
-export function joinPrivateBoardChannel(channelName: string) {
+export type BoardRealtimeMessage = {
+  action: string;
+  [key: string]: unknown;
+};
+
+export function sendPrivateBoardMessage(channel: RealtimeChannel, payload: BoardRealtimeMessage) {
+  return channel.send({ type: 'broadcast', event: 'board-message', payload });
+}
+
+export function joinPrivateBoardChannel(
+  channelName: string,
+  onMessage?: (payload: BoardRealtimeMessage) => void,
+) {
   const channel: RealtimeChannel = getSupabaseClient().channel(channelName, {
     config: { private: true },
   });
+  if (onMessage) {
+    channel.on('broadcast', { event: 'board-message' }, ({ payload }) => {
+      if (payload && typeof payload.action === 'string') onMessage(payload as BoardRealtimeMessage);
+    });
+  }
 
   const ready = new Promise<RealtimeChannel>((resolve, reject) => {
     const timeout = window.setTimeout(() => {
