@@ -30,6 +30,8 @@ const MainStage = () => {
   const [isLaserTool, setIsLaserTool] = useState(false);
 
   const excalidrawAPI = useRef<any>(null);
+  const whiteboardRef = useRef<HTMLDivElement>(null);
+  const toolbarControlsRef = useRef<HTMLDivElement>(null);
   const peerInstance = useRef<Peer | null>(null);
   const mainStageClient = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
@@ -375,6 +377,45 @@ const MainStage = () => {
   }, []);
 
   useEffect(() => {
+    const root = whiteboardRef.current;
+    const controls = toolbarControlsRef.current;
+    if (!root || !controls) return;
+
+    let frame = 0;
+    let observedToolbar: Element | null = null;
+    let resizeObserver: ResizeObserver;
+    const updatePosition = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const toolbar = root.querySelector('.App-toolbar');
+        if (!toolbar) return;
+        if (toolbar !== observedToolbar) {
+          if (observedToolbar) resizeObserver.unobserve(observedToolbar);
+          observedToolbar = toolbar;
+          resizeObserver.observe(toolbar);
+        }
+        const bounds = toolbar.getBoundingClientRect();
+        controls.style.left = `${Math.round(bounds.right + 8)}px`;
+        controls.style.top = `${Math.round(bounds.top)}px`;
+      });
+    };
+    resizeObserver = new ResizeObserver(updatePosition);
+
+    const mutationObserver = new MutationObserver(updatePosition);
+    mutationObserver.observe(root, { childList: true, subtree: true });
+    resizeObserver.observe(root);
+    window.addEventListener('resize', updatePosition);
+    updatePosition();
+
+    return () => {
+      cancelAnimationFrame(frame);
+      mutationObserver.disconnect();
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
       peerInstance.current?.destroy();
       void realtimeChannel.current?.unsubscribe();
@@ -389,7 +430,7 @@ const MainStage = () => {
         </div>
       )}
       <div className="relative flex-1">
-        <div className={`whiteboard h-full ${showStyles ? "" : "hide-style-panel"}`}>
+        <div ref={whiteboardRef} className={`whiteboard h-full ${showStyles ? "" : "hide-style-panel"}`}>
           <Excalidraw 
             excalidrawAPI={(api) => {
               excalidrawAPI.current = api;
@@ -402,7 +443,7 @@ const MainStage = () => {
               throttledViewBroadcast(appState);
             }}
             renderTopRightUI={() => (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div ref={toolbarControlsRef} className="main-stage-toolbar-controls">
                 {isDrawTool && (
                   <button
                     className="ToolIcon_type_button"

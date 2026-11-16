@@ -71,6 +71,14 @@
   justify-content: center;
 }
 
+.main-stage-toolbar-controls {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Selected tool */
 .whiteboard .ToolIcon--selected {
   background: #4f46e5;
