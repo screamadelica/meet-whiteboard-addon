@@ -378,8 +378,7 @@ const MainStage = () => {
 
   useEffect(() => {
     const root = whiteboardRef.current;
-    const controls = toolbarControlsRef.current;
-    if (!root || !controls) return;
+    if (!root) return;
 
     let frame = 0;
     let observedToolbar: Element | null = null;
@@ -388,7 +387,8 @@ const MainStage = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const toolbar = root.querySelector('.App-toolbar');
-        if (!toolbar) return;
+        const controls = toolbarControlsRef.current;
+        if (!toolbar || !controls) return;
         if (toolbar !== observedToolbar) {
           if (observedToolbar) resizeObserver.unobserve(observedToolbar);
           observedToolbar = toolbar;
