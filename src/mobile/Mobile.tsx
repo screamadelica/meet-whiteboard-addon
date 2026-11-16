@@ -23,6 +23,7 @@ const MobileController = () => {
   const retryCount = useRef(0);
   const peerRef = useRef<Peer | null>(null);
   const realtimeChannel = useRef<RealtimeChannel | null>(null);
+  const realtimeReady = useRef(false);
 
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
@@ -114,6 +115,57 @@ const MobileController = () => {
     };
   }, []);
 
+  const sendMobileMessage = useCallback((message: any) => {
+    const serialized = JSON.stringify(message);
+    const channel = realtimeChannel.current;
+    if (realtimeReady.current && channel) {
+      void sendPrivateBoardMessage(channel, message).then((sendStatus) => {
+        if (sendStatus === 'ok') return;
+        realtimeReady.current = false;
+        setRealtimeStatus(`Realtime failed (${sendStatus}); PeerJS fallback`);
+        if (connectionRef.current?.open) {
+          connectionRef.current.send(JSON.stringify({ action: 'transport-fallback' }));
+          connectionRef.current.send(serialized);
+        }
+      }).catch((error) => {
+        realtimeReady.current = false;
+        setRealtimeStatus('Realtime failed; PeerJS fallback');
+        console.error('[Mobile] Realtime send failed:', error);
+        if (connectionRef.current?.open) {
+          connectionRef.current.send(JSON.stringify({ action: 'transport-fallback' }));
+          connectionRef.current.send(serialized);
+        }
+      });
+      return;
+    }
+    if (connectionRef.current?.open) connectionRef.current.send(serialized);
+  }, []);
+
+  const applyIncomingMessage = useCallback((incomingData: any) => {
+    if (incomingData.action === 'stage-view') {
+      setStageRect(incomingData.rect);
+      return;
+    }
+    if (incomingData.action !== 'scene-update' || !excalidrawAPI.current) return;
+
+    const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
+    let nextElements: ExcalidrawElement[];
+    if (incomingData.isDiff) {
+      const map = new Map(currentElements.map((element) => [element.id, element]));
+      (incomingData.elements as ExcalidrawElement[]).forEach((remoteElement) => {
+        const localElement = map.get(remoteElement.id);
+        if (!localElement || remoteElement.version > localElement.version) map.set(remoteElement.id, remoteElement);
+      });
+      nextElements = Array.from(map.values());
+    } else {
+      nextElements = incomingData.elements;
+    }
+    isRemoteUpdate.current = true;
+    excalidrawAPI.current.updateScene({ elements: nextElements });
+    nextElements.forEach((element) => versionMap.current.set(element.id, element.version));
+    window.setTimeout(() => { isRemoteUpdate.current = false; }, 100);
+  }, []);
+
   const connectToPeer = useCallback((peer: Peer, peerId: string) => {
     console.log(`[Mobile] Attempting connection to: "${peerId}" (attempt ${retryCount.current + 1}/${MAX_RETRIES})`);
     setStatus(`Connecting... (${retryCount.current + 1}/${MAX_RETRIES})`);
@@ -145,29 +197,7 @@ const MobileController = () => {
     conn.on('data', (data: any) => {
       console.log('[Mobile] Data received, length:', String(data).length);
       try {
-        const incomingData = JSON.parse(data);
-        if (incomingData.action === 'stage-view') {
-          setStageRect(incomingData.rect);
-          return;
-        }
-        if (incomingData.action === 'scene-update' && excalidrawAPI.current) {
-          const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
-          let nextElements: ExcalidrawElement[];
-          if (incomingData.isDiff) {
-            const map = new Map(currentElements.map((e) => [e.id, e]));
-            (incomingData.elements as ExcalidrawElement[]).forEach((remoteEl) => {
-              const localEl = map.get(remoteEl.id);
-              if (!localEl || remoteEl.version > localEl.version) map.set(remoteEl.id, remoteEl);
-            });
-            nextElements = Array.from(map.values());
-          } else {
-            nextElements = incomingData.elements;
-          }
-          isRemoteUpdate.current = true;
-          excalidrawAPI.current.updateScene({ elements: nextElements });
-          nextElements.forEach((el) => versionMap.current.set(el.id, el.version));
-          setTimeout(() => { isRemoteUpdate.current = false; }, 100);
-        }
+        applyIncomingMessage(JSON.parse(data));
       } catch (e) { console.error('[Mobile] Parse error:', e); }
     });
 
@@ -187,7 +217,7 @@ const MobileController = () => {
         setStatus("❌ Connection failed. Please rescan the QR code.");
       }
     });
-  }, []);
+  }, [applyIncomingMessage]);
 
   useEffect(() => {
     if (!targetPeerId) {
@@ -205,17 +235,22 @@ const MobileController = () => {
             const channel = await joinPrivateBoardChannel(board.channelName, (message) => {
               if (message.action === 'realtime-probe-ack') {
                 if (probeTimeout) window.clearTimeout(probeTimeout);
+                realtimeReady.current = true;
                 setRealtimeStatus('Realtime broadcast verified');
                 console.log('[Mobile] Supabase Broadcast probe verified');
+              } else {
+                applyIncomingMessage(message);
               }
             });
             realtimeChannel.current = channel;
             setRealtimeStatus('Testing private Broadcast...');
             probeTimeout = window.setTimeout(() => {
+              realtimeReady.current = false;
               setRealtimeStatus('Broadcast response timed out');
             }, 5000);
             const sendStatus = await sendPrivateBoardMessage(channel, { action: 'realtime-probe' });
             if (sendStatus !== 'ok') {
+              realtimeReady.current = false;
               window.clearTimeout(probeTimeout);
               setRealtimeStatus(`Broadcast send ${sendStatus}`);
             }
@@ -267,10 +302,10 @@ const MobileController = () => {
       peerRef.current?.destroy();
       void realtimeChannel.current?.unsubscribe();
     };
-  }, [targetPeerId, targetBoardId, inviteToken, connectToPeer]);
+  }, [targetPeerId, targetBoardId, inviteToken, connectToPeer, applyIncomingMessage]);
 
   const onBoardChange = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
-    if (isRemoteUpdate.current || !connectionRef.current?.open) return;
+    if (isRemoteUpdate.current || (!realtimeReady.current && !connectionRef.current?.open)) return;
     const updates = elements.filter((el) => (versionMap.current.get(el.id) || -1) < el.version);
     updates.forEach((el) => sentElements.current.set(el.id, el));
     // A pinch cancels the stroke it started and drops it from the scene without marking it deleted.
@@ -282,24 +317,23 @@ const MobileController = () => {
     });
     if (updates.length > 0) {
       updates.forEach((el) => versionMap.current.set(el.id, el.version));
-      connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements: updates, isDiff: true }));
+      sendMobileMessage({ action: 'scene-update', elements: updates, isDiff: true });
     }
-  }, 50), []);
+  }, 50), [sendMobileMessage]);
 
   const wasLaser = useRef(false);
   const onPointerUpdate = useMemo(() => throttle((payload: { pointer: { x: number; y: number; tool: string }; button: string }) => {
-    const conn = connectionRef.current;
-    if (!conn?.open) return;
+    if (!realtimeReady.current && !connectionRef.current?.open) return;
     const isLaser = payload.pointer.tool === 'laser';
     // Hide the stage's laser once the phone leaves the laser tool.
     if (!isLaser && !wasLaser.current) return;
     wasLaser.current = isLaser;
-    conn.send(JSON.stringify({
+    sendMobileMessage({
       action: 'laser',
       pointer: isLaser ? payload.pointer : null,
       button: payload.button,
-    }));
-  }, 30), []);
+    });
+  }, 30), [sendMobileMessage]);
 
   const resetCanvas = useCallback(() => {
     excalidrawAPI.current?.resetScene();
@@ -307,18 +341,17 @@ const MobileController = () => {
     versionMap.current.clear();
     sentElements.current.clear();
     // A full (non-diff) empty scene is the only way to clear the main stage.
-    connectionRef.current?.open &&
-      connectionRef.current.send(JSON.stringify({ action: 'scene-update', elements: [], isDiff: false }));
-  }, []);
+    sendMobileMessage({ action: 'scene-update', elements: [], isDiff: false });
+  }, [sendMobileMessage]);
 
   const showOnStage = useCallback(() => {
     const api = excalidrawAPI.current;
-    if (!api || !connectionRef.current?.open) return;
+    if (!api || (!realtimeReady.current && !connectionRef.current?.open)) return;
     const app = api.getAppState();
     const zoom = app.zoom.value;
     const rect = { x: -app.scrollX, y: -app.scrollY, width: app.width / zoom, height: app.height / zoom };
-    connectionRef.current.send(JSON.stringify({ action: 'show-area', rect }));
-  }, []);
+    sendMobileMessage({ action: 'show-area', rect });
+  }, [sendMobileMessage]);
 
   return (
     <div

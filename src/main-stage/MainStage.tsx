@@ -35,6 +35,8 @@ const MainStage = () => {
   const lastSentVersionMap = useRef(new Map<string, number>());
   const remotePointers = useRef(new Map<string, any>());
   const realtimeChannel = useRef<RealtimeChannel | null>(null);
+  const realtimeReady = useRef(false);
+  const activeConnectionsRef = useRef<DataConnection[]>([]);
 
   // If peer opens before SDK is ready, store the notification here and flush it when SDK is ready
   const pendingNotification = useRef<{
@@ -99,32 +101,107 @@ const MainStage = () => {
   }, [sdkReady]);
 
   // --- 2. Throttled Broadcast ---
+  const sendStageMessage = (message: any) => {
+    const connections = activeConnectionsRef.current;
+    const channel = realtimeChannel.current;
+    if (realtimeReady.current && channel) {
+      void sendPrivateBoardMessage(channel, message).then((status) => {
+        if (status === 'ok') return;
+        console.warn('[MainStage] Realtime send failed; switching back to PeerJS:', status);
+        realtimeReady.current = false;
+        const serialized = JSON.stringify(message);
+        connections.forEach((conn) => { if (conn.open) conn.send(serialized); });
+      }).catch((error) => {
+        console.warn('[MainStage] Realtime send failed; switching back to PeerJS:', error);
+        realtimeReady.current = false;
+        const serialized = JSON.stringify(message);
+        connections.forEach((conn) => { if (conn.open) conn.send(serialized); });
+      });
+      return;
+    }
+
+    const serialized = JSON.stringify(message);
+    connections.forEach((conn) => { if (conn.open) conn.send(serialized); });
+  };
+
   const throttledBroadcast = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
-    if (isRemoteUpdate.current || activeConnections.length === 0) return;
+    if (isRemoteUpdate.current || (activeConnections.length === 0 && !realtimeReady.current)) return;
     const updates = elements.filter(el => el.version > (lastSentVersionMap.current.get(el.id) || -1));
     if (updates.length === 0) return;
-    const message = JSON.stringify({ action: 'scene-update', elements: updates, isDiff: true });
-    activeConnections.forEach(conn => { if (conn.open) conn.send(message); });
+    sendStageMessage({ action: 'scene-update', elements: updates, isDiff: true });
     updates.forEach(el => lastSentVersionMap.current.set(el.id, el.version));
   }, 50), [activeConnections]);
 
   // --- 3. Connection Logic ---
-  const viewMessage = (app: any) => JSON.stringify({
+  const viewMessage = (app: any) => ({
     action: 'stage-view',
     rect: { x: -app.scrollX, y: -app.scrollY, width: app.width / app.zoom.value, height: app.height / app.zoom.value },
   });
 
   const throttledViewBroadcast = useMemo(() => throttle((app: any) => {
-    const message = viewMessage(app);
-    activeConnections.forEach(conn => { if (conn.open) conn.send(message); });
+    if (activeConnections.length > 0 || realtimeReady.current) sendStageMessage(viewMessage(app));
   }, 100), [activeConnections]);
+
+  const handleRealtimeMessage = (message: any) => {
+    if (message.action === 'laser' && excalidrawAPI.current) {
+      if (message.pointer) {
+        remotePointers.current.set('mobile-realtime', {
+          pointer: message.pointer,
+          button: message.button,
+          username: null,
+          color: { background: '#ff0000', stroke: '#ff0000' },
+        });
+      } else {
+        remotePointers.current.delete('mobile-realtime');
+      }
+      excalidrawAPI.current.updateScene({ collaborators: new Map(remotePointers.current) });
+      return;
+    }
+
+    if (message.action === 'show-area' && excalidrawAPI.current) {
+      const { x, y, width, height } = message.rect;
+      const app = excalidrawAPI.current.getAppState();
+      const zoom = Math.min(app.width / width, app.height / height);
+      excalidrawAPI.current.updateScene({
+        appState: {
+          zoom: { value: zoom },
+          scrollX: -x + (app.width / zoom - width) / 2,
+          scrollY: -y + (app.height / zoom - height) / 2,
+        },
+      });
+      return;
+    }
+
+    if (message.action === 'scene-update' && excalidrawAPI.current) {
+      const currentElements = excalidrawAPI.current.getSceneElements() as ExcalidrawElement[];
+      let nextElements: ExcalidrawElement[];
+      if (message.isDiff) {
+        const map = new Map<string, ExcalidrawElement>(currentElements.map((element) => [element.id, element]));
+        (message.elements as ExcalidrawElement[]).forEach((remoteElement) => {
+          const localElement = map.get(remoteElement.id);
+          if (!localElement || remoteElement.version > localElement.version) map.set(remoteElement.id, remoteElement);
+        });
+        nextElements = Array.from(map.values());
+      } else {
+        nextElements = message.elements;
+      }
+      isRemoteUpdate.current = true;
+      excalidrawAPI.current.updateScene({ elements: nextElements });
+      nextElements.forEach((element) => lastSentVersionMap.current.set(element.id, element.version));
+      window.setTimeout(() => { isRemoteUpdate.current = false; }, 100);
+    }
+  };
 
   const setupConnection = (conn: DataConnection) => {
     console.log('[MainStage] Incoming connection from peer:', conn.peer);
     conn.on('open', () => {
       console.log('[MainStage] ✓ Connection opened with:', conn.peer);
-      setActiveConnections(prev => [...prev, conn]);
-      if (excalidrawAPI.current) {
+      setActiveConnections((prev) => {
+        const next = [...prev, conn];
+        activeConnectionsRef.current = next;
+        return next;
+      });
+      if (excalidrawAPI.current && !realtimeReady.current) {
         conn.send(viewMessage(excalidrawAPI.current.getAppState()));
         conn.send(JSON.stringify({ 
           action: 'scene-update', 
@@ -137,6 +214,12 @@ const MainStage = () => {
     conn.on('data', (data: any) => {
       try {
         const incomingData = JSON.parse(data);
+        if (incomingData.action === 'transport-fallback') {
+          realtimeReady.current = false;
+          remotePointers.current.delete('mobile-realtime');
+          excalidrawAPI.current?.updateScene({ collaborators: new Map(remotePointers.current) });
+          return;
+        }
         if (incomingData.action === 'laser' && excalidrawAPI.current) {
           if (incomingData.pointer) {
             remotePointers.current.set(conn.peer, {
@@ -192,7 +275,11 @@ const MainStage = () => {
 
     conn.on('close', () => {
       console.log('[MainStage] Connection closed:', conn.peer);
-      setActiveConnections(prev => prev.filter(c => c.peer !== conn.peer));
+      setActiveConnections((prev) => {
+        const next = prev.filter((connection) => connection.peer !== conn.peer);
+        activeConnectionsRef.current = next;
+        return next;
+      });
       remotePointers.current.delete(conn.peer);
       excalidrawAPI.current?.updateScene({ collaborators: new Map(remotePointers.current) });
     });
@@ -222,13 +309,29 @@ const MainStage = () => {
     try {
       await realtimeChannel.current?.unsubscribe();
       realtimeChannel.current = null;
+      realtimeReady.current = false;
       const session = await createRealtimeSession();
       realtimeChannel.current = await joinPrivateBoardChannel(session.channelName, (message) => {
         if (message.action === 'realtime-probe') {
           void sendPrivateBoardMessage(realtimeChannel.current!, { action: 'realtime-probe-ack' })
             .then((status) => {
-              if (status !== 'ok') console.error('[MainStage] Realtime probe acknowledgment failed:', status);
+              if (status !== 'ok') {
+                console.error('[MainStage] Realtime probe acknowledgment failed:', status);
+                return;
+              }
+              realtimeReady.current = true;
+              console.log('[MainStage] Supabase Realtime transport selected');
+              if (excalidrawAPI.current) {
+                sendStageMessage(viewMessage(excalidrawAPI.current.getAppState()));
+                sendStageMessage({
+                  action: 'scene-update',
+                  elements: excalidrawAPI.current.getSceneElements(),
+                  isDiff: false,
+                });
+              }
             });
+        } else {
+          handleRealtimeMessage(message);
         }
       });
       realtimeInvite = { boardId: session.boardId, inviteToken: session.participantInviteToken };
