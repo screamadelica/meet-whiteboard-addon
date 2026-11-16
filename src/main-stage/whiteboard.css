@@ -29,6 +29,11 @@
   display: none !important;
 }
 
+.whiteboard button[title="Library"],
+.whiteboard button[aria-label="Library"] {
+  display: none !important;
+}
+
 
 /* Remote laser trails are filled from a pale hash-derived colour; force red. */
 .whiteboard .LaserToolOverlayCanvas path {

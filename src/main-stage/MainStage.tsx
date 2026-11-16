@@ -27,6 +27,7 @@ const MainStage = () => {
   const [activeConnections, setActiveConnections] = useState<DataConnection[]>([]);
   const [showStyles, setShowStyles] = useState(false);
   const [isDrawTool, setIsDrawTool] = useState(false);  
+  const [isLaserTool, setIsLaserTool] = useState(false);
 
   const excalidrawAPI = useRef<any>(null);
   const peerInstance = useRef<Peer | null>(null);
@@ -396,20 +397,36 @@ const MainStage = () => {
             }}
             onChange={(elements, appState) => {
               setIsDrawTool(appState.activeTool.type === "freedraw");
+              setIsLaserTool(appState.activeTool.type === "laser");
               throttledBroadcast(elements);
               throttledViewBroadcast(appState);
             }}
-            renderTopRightUI={() =>
-              isDrawTool ? (
+            renderTopRightUI={() => (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {isDrawTool && (
+                  <button
+                    className="ToolIcon_type_button"
+                    title="Toggle style panel"
+                    aria-label="Toggle style panel"
+                    onClick={() => setShowStyles(v => !v)}
+                  >
+                    🎨
+                  </button>
+                )}
                 <button
-                  className="ToolIcon_type_button"
-                  title="Toggle style panel"
-                  onClick={() => setShowStyles(v => !v)}
+                  className={`ToolIcon_type_button${isLaserTool ? ' ToolIcon--selected' : ''}`}
+                  title="Laser pointer"
+                  aria-label="Laser pointer"
+                  aria-pressed={isLaserTool}
+                  onClick={() => excalidrawAPI.current?.setActiveTool({ type: isLaserTool ? 'freedraw' : 'laser' })}
                 >
-                  🎨
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m5 3 14 10-7 1-3 7L5 3Z" />
+                    <path d="M14 4V2M19 7l2-1M17 3l1-2" />
+                  </svg>
                 </button>
-              ) : null
-            }
+              </div>
+            )}
           />
         </div>        
       </div>
