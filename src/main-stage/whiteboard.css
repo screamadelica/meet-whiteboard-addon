@@ -29,8 +29,9 @@
   display: none !important;
 }
 
-.whiteboard button[title="Library"],
-.whiteboard button[aria-label="Library"] {
+.whiteboard .layer-ui__library,
+.whiteboard [title*="Library"],
+.whiteboard [aria-label*="Library"] {
   display: none !important;
 }
 
