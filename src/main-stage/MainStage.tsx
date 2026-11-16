@@ -110,12 +110,20 @@ const MainStage = () => {
         console.warn('[MainStage] Realtime send failed; switching back to PeerJS:', status);
         realtimeReady.current = false;
         const serialized = JSON.stringify(message);
-        connections.forEach((conn) => { if (conn.open) conn.send(serialized); });
+        connections.forEach((conn) => {
+          if (!conn.open) return;
+          conn.send(JSON.stringify({ action: 'transport-peerjs' }));
+          conn.send(serialized);
+        });
       }).catch((error) => {
         console.warn('[MainStage] Realtime send failed; switching back to PeerJS:', error);
         realtimeReady.current = false;
         const serialized = JSON.stringify(message);
-        connections.forEach((conn) => { if (conn.open) conn.send(serialized); });
+        connections.forEach((conn) => {
+          if (!conn.open) return;
+          conn.send(JSON.stringify({ action: 'transport-peerjs' }));
+          conn.send(serialized);
+        });
       });
       return;
     }
@@ -143,6 +151,26 @@ const MainStage = () => {
   }, 100), [activeConnections]);
 
   const handleRealtimeMessage = (message: any) => {
+    if (message.action === 'transport-fallback') {
+      realtimeReady.current = true;
+      console.log('[MainStage] Mobile switched to Supabase Realtime');
+      if (excalidrawAPI.current) {
+        sendStageMessage(viewMessage(excalidrawAPI.current.getAppState()));
+        sendStageMessage({
+          action: 'scene-update',
+          elements: excalidrawAPI.current.getSceneElements(),
+          isDiff: false,
+        });
+      }
+      return;
+    }
+
+    if (message.action === 'transport-peerjs') {
+      realtimeReady.current = false;
+      console.log('[MainStage] Mobile returned to PeerJS');
+      return;
+    }
+
     if (message.action === 'laser' && excalidrawAPI.current) {
       if (message.pointer) {
         remotePointers.current.set('mobile-realtime', {
@@ -218,6 +246,10 @@ const MainStage = () => {
           realtimeReady.current = false;
           remotePointers.current.delete('mobile-realtime');
           excalidrawAPI.current?.updateScene({ collaborators: new Map(remotePointers.current) });
+          return;
+        }
+        if (incomingData.action === 'transport-peerjs') {
+          realtimeReady.current = false;
           return;
         }
         if (incomingData.action === 'laser' && excalidrawAPI.current) {
@@ -317,18 +349,8 @@ const MainStage = () => {
             .then((status) => {
               if (status !== 'ok') {
                 console.error('[MainStage] Realtime probe acknowledgment failed:', status);
-                return;
               }
-              realtimeReady.current = true;
-              console.log('[MainStage] Supabase Realtime transport selected');
-              if (excalidrawAPI.current) {
-                sendStageMessage(viewMessage(excalidrawAPI.current.getAppState()));
-                sendStageMessage({
-                  action: 'scene-update',
-                  elements: excalidrawAPI.current.getSceneElements(),
-                  isDiff: false,
-                });
-              }
+              console.log('[MainStage] Supabase Realtime fallback verified');
             });
         } else {
           handleRealtimeMessage(message);

@@ -23,6 +23,7 @@ const MobileController = () => {
   const retryCount = useRef(0);
   const peerRef = useRef<Peer | null>(null);
   const realtimeChannel = useRef<RealtimeChannel | null>(null);
+  const realtimeAvailable = useRef(false);
   const realtimeReady = useRef(false);
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -115,31 +116,56 @@ const MobileController = () => {
     };
   }, []);
 
+  const activateRealtimeFallback = useCallback(async () => {
+    const channel = realtimeChannel.current;
+    if (!realtimeAvailable.current || !channel) return false;
+    const sendStatus = await sendPrivateBoardMessage(channel, { action: 'transport-fallback' });
+    if (sendStatus !== 'ok') {
+      setRealtimeStatus(`Realtime fallback activation failed (${sendStatus})`);
+      return false;
+    }
+    realtimeReady.current = true;
+    setRealtimeStatus('PeerJS unavailable; Realtime active');
+    return true;
+  }, []);
+
   const sendMobileMessage = useCallback((message: any) => {
     const serialized = JSON.stringify(message);
     const channel = realtimeChannel.current;
     if (realtimeReady.current && channel) {
       void sendPrivateBoardMessage(channel, message).then((sendStatus) => {
         if (sendStatus === 'ok') return;
-        realtimeReady.current = false;
-        setRealtimeStatus(`Realtime failed (${sendStatus}); PeerJS fallback`);
         if (connectionRef.current?.open) {
-          connectionRef.current.send(JSON.stringify({ action: 'transport-fallback' }));
+          realtimeReady.current = false;
+          setRealtimeStatus(`Realtime failed (${sendStatus}); PeerJS active`);
+          connectionRef.current.send(JSON.stringify({ action: 'transport-peerjs' }));
           connectionRef.current.send(serialized);
+        } else {
+          setRealtimeStatus(`Realtime send failed (${sendStatus}); waiting for PeerJS`);
         }
       }).catch((error) => {
-        realtimeReady.current = false;
-        setRealtimeStatus('Realtime failed; PeerJS fallback');
         console.error('[Mobile] Realtime send failed:', error);
         if (connectionRef.current?.open) {
-          connectionRef.current.send(JSON.stringify({ action: 'transport-fallback' }));
+          realtimeReady.current = false;
+          setRealtimeStatus('Realtime failed; PeerJS active');
+          connectionRef.current.send(JSON.stringify({ action: 'transport-peerjs' }));
           connectionRef.current.send(serialized);
+        } else {
+          setRealtimeStatus('Realtime send failed; waiting for PeerJS');
         }
       });
       return;
     }
-    if (connectionRef.current?.open) connectionRef.current.send(serialized);
-  }, []);
+    if (connectionRef.current?.open) {
+      connectionRef.current.send(serialized);
+      return;
+    }
+    if (realtimeAvailable.current) {
+      void activateRealtimeFallback().then((activated) => {
+        if (activated) void sendPrivateBoardMessage(channel!, message);
+      });
+    }
+  }, [activateRealtimeFallback]);
 
   const applyIncomingMessage = useCallback((incomingData: any) => {
     if (incomingData.action === 'stage-view') {
@@ -184,6 +210,7 @@ const MobileController = () => {
       } else {
         console.error('[Mobile] Max retries reached. Could not connect to:', peerId);
         setStatus("❌ Could not connect. Please rescan the QR code.");
+        if (realtimeAvailable.current) void activateRealtimeFallback();
       }
     }, 5000);
 
@@ -197,13 +224,20 @@ const MobileController = () => {
     conn.on('data', (data: any) => {
       console.log('[Mobile] Data received, length:', String(data).length);
       try {
-        applyIncomingMessage(JSON.parse(data));
+        const message = JSON.parse(data);
+        if (message.action === 'transport-peerjs') {
+          realtimeReady.current = false;
+          setRealtimeStatus('PeerJS active; Realtime ready');
+          return;
+        }
+        applyIncomingMessage(message);
       } catch (e) { console.error('[Mobile] Parse error:', e); }
     });
 
     conn.on('close', () => {
       console.warn('[Mobile] Connection closed unexpectedly, will retry...');
       setStatus("Disconnected — retrying...");
+      if (realtimeAvailable.current) void activateRealtimeFallback();
       setTimeout(() => connectToPeer(peer, peerId), RETRY_DELAY_MS);
     });
 
@@ -215,9 +249,10 @@ const MobileController = () => {
         setTimeout(() => connectToPeer(peer, peerId), RETRY_DELAY_MS);
       } else {
         setStatus("❌ Connection failed. Please rescan the QR code.");
+        if (realtimeAvailable.current) void activateRealtimeFallback();
       }
     });
-  }, [applyIncomingMessage]);
+  }, [applyIncomingMessage, activateRealtimeFallback]);
 
   useEffect(() => {
     if (!targetPeerId) {
@@ -235,8 +270,8 @@ const MobileController = () => {
             const channel = await joinPrivateBoardChannel(board.channelName, (message) => {
               if (message.action === 'realtime-probe-ack') {
                 if (probeTimeout) window.clearTimeout(probeTimeout);
-                realtimeReady.current = true;
-                setRealtimeStatus('Realtime broadcast verified');
+                realtimeAvailable.current = true;
+                setRealtimeStatus(connectionRef.current?.open ? 'PeerJS active; Realtime ready' : 'Realtime fallback ready');
                 console.log('[Mobile] Supabase Broadcast probe verified');
               } else {
                 applyIncomingMessage(message);
@@ -245,11 +280,13 @@ const MobileController = () => {
             realtimeChannel.current = channel;
             setRealtimeStatus('Testing private Broadcast...');
             probeTimeout = window.setTimeout(() => {
+              realtimeAvailable.current = false;
               realtimeReady.current = false;
               setRealtimeStatus('Broadcast response timed out');
             }, 5000);
             const sendStatus = await sendPrivateBoardMessage(channel, { action: 'realtime-probe' });
             if (sendStatus !== 'ok') {
+              realtimeAvailable.current = false;
               realtimeReady.current = false;
               window.clearTimeout(probeTimeout);
               setRealtimeStatus(`Broadcast send ${sendStatus}`);
@@ -400,7 +437,7 @@ const MobileController = () => {
           display: isLandscape ? 'none' : 'block',
           position: 'absolute', top: 30, left: 8, zIndex: 50,
           color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 10,
-          background: realtimeStatus === 'Realtime broadcast verified'
+          background: realtimeStatus.includes('ready') || realtimeStatus === 'PeerJS active'
             ? 'rgba(0,128,100,0.8)'
             : realtimeStatus.startsWith('Testing')
               ? 'rgba(161,98,7,0.85)'
