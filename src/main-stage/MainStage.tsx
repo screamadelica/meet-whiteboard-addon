@@ -45,7 +45,7 @@ const MainStage = () => {
   const pendingNotification = useRef<{
     peerId: string;
     pinValue: string;
-    realtimeInvite?: { boardId: string; inviteToken: string };
+    realtimeInvite?: { boardId: string; tutorInviteToken: string; studentInviteToken: string };
   } | null>(null);
 
   // --- 1. Meet SDK Init ---
@@ -76,7 +76,7 @@ const MainStage = () => {
   const notifySidePanel = async (
     peerId: string,
     pinValue: string,
-    realtimeInvite?: { boardId: string; inviteToken: string },
+    realtimeInvite?: { boardId: string; tutorInviteToken: string; studentInviteToken: string },
   ) => {
     if (!mainStageClient.current) {
       console.warn('[MainStage] notifySidePanel: mainStageClient not ready yet — queuing for when SDK is ready');
@@ -84,7 +84,7 @@ const MainStage = () => {
       return;
     }
     const message = { action: "pin", prefix: PREFIX, value: pinValue, peerId, ...realtimeInvite };
-    console.log('[MainStage] Calling notifySidePanel with message:', message);
+    console.log('[MainStage] Sending board invite details to side panel');
     try {
       await mainStageClient.current.notifySidePanel(JSON.stringify(message));
       console.log('[MainStage] ✓ notifySidePanel sent successfully');
@@ -300,7 +300,7 @@ const MainStage = () => {
     console.log('[MainStage] Creating peer with ID:', peerId);
     console.log('[MainStage] SDK ready at this moment?', !!mainStageClient.current);
 
-    let realtimeInvite: { boardId: string; inviteToken: string } | undefined;
+    let realtimeInvite: { boardId: string; tutorInviteToken: string; studentInviteToken: string } | undefined;
     try {
       await realtimeChannel.current?.unsubscribe();
       realtimeChannel.current = null;
@@ -319,7 +319,11 @@ const MainStage = () => {
           handleRealtimeMessage(message);
         }
       });
-      realtimeInvite = { boardId: session.boardId, inviteToken: session.participantInviteToken };
+      realtimeInvite = {
+        boardId: session.boardId,
+        tutorInviteToken: session.tutorInviteToken,
+        studentInviteToken: session.studentInviteToken,
+      };
       console.log('[MainStage] Private Supabase channel ready');
     } catch (error) {
       console.error('[MainStage] Private Supabase setup failed; PeerJS remains available:', error);

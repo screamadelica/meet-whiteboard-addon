@@ -39,7 +39,8 @@ export default async function handler(request, response) {
     return response.status(201).json({
       boardId: credentials.boardId,
       channelName: credentials.channelName,
-      participantInviteToken: credentials.participantInviteToken,
+      tutorInviteToken: credentials.ownerInviteToken,
+      studentInviteToken: credentials.participantInviteToken,
       expiresAt: credentials.expiresAt,
     });
   } catch (error) {
