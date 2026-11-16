@@ -76,7 +76,14 @@
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
+  height: calc(var(--lg-button-size, 2.25rem) + 8px);
+  padding: 4px;
+  box-sizing: border-box;
+  background: var(--island-bg-color, #ffffff);
+  border: 1px solid var(--default-border-color, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 /* Selected tool */
