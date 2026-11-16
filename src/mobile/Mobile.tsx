@@ -2,7 +2,9 @@ import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import throttle from 'lodash.throttle';
+import { joinPrivateBoardChannel, redeemRealtimeInvite } from '../realtime/supabase';
 import "./whiteboard.css";
 
 const MAX_RETRIES = 5;
@@ -10,6 +12,7 @@ const RETRY_DELAY_MS = 2000;
 
 const MobileController = () => {
   const [status, setStatus] = useState("Connecting...");
+  const [realtimeStatus, setRealtimeStatus] = useState('');
   const [isStarted, setIsStarted] = useState(false);
   const excalidrawAPI = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
@@ -19,9 +22,12 @@ const MobileController = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const retryCount = useRef(0);
   const peerRef = useRef<Peer | null>(null);
+  const realtimeChannel = useRef<RealtimeChannel | null>(null);
 
   const urlParams = new URLSearchParams(window.location.search);
   const targetPeerId = urlParams.get('peerId');
+  const targetBoardId = urlParams.get('boardId');
+  const inviteToken = new URLSearchParams(window.location.hash.slice(1)).get('inviteToken');
 
   console.log('[Mobile] Page loaded. targetPeerId from URL:', targetPeerId);
 
@@ -192,6 +198,18 @@ const MobileController = () => {
 
     const initPeer = async () => {
       try {
+        if (targetBoardId && inviteToken) {
+          try {
+            const board = await redeemRealtimeInvite(targetBoardId, inviteToken);
+            realtimeChannel.current = await joinPrivateBoardChannel(board.channelName);
+            setRealtimeStatus('Private channel ready');
+            console.log('[Mobile] Private Supabase channel ready');
+          } catch (error) {
+            setRealtimeStatus('Private channel unavailable');
+            console.error('[Mobile] Private Supabase setup failed; PeerJS remains available:', error);
+          }
+        }
+
         console.log('[Mobile] Fetching ICE servers...');
         const iceResponse = await fetch('/api/get-ice-servers').catch(() => null);
         
@@ -232,8 +250,9 @@ const MobileController = () => {
     return () => {
       console.log('[Mobile] Cleaning up peer');
       peerRef.current?.destroy();
+      void realtimeChannel.current?.unsubscribe();
     };
-  }, [targetPeerId, connectToPeer]);
+  }, [targetPeerId, targetBoardId, inviteToken, connectToPeer]);
 
   const onBoardChange = useMemo(() => throttle((elements: readonly ExcalidrawElement[]) => {
     if (isRemoteUpdate.current || !connectionRef.current?.open) return;
@@ -328,6 +347,17 @@ const MobileController = () => {
       }}>
         {status}
       </div>
+      {realtimeStatus && (
+        <div style={{
+          display: isLandscape ? 'none' : 'block',
+          position: 'absolute', top: 30, left: 8, zIndex: 50,
+          color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 10,
+          background: realtimeStatus === 'Private channel ready' ? 'rgba(0,128,100,0.8)' : 'rgba(153,27,27,0.8)',
+          pointerEvents: 'none',
+        }}>
+          {realtimeStatus}
+        </div>
+      )}
 
       {isLandscape && (
         <div style={{

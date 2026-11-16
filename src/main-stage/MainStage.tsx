@@ -3,7 +3,9 @@ import { meet } from '@googleworkspace/meet-addons';
 import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import throttle from 'lodash.throttle';
+import { createRealtimeSession, joinPrivateBoardChannel } from '../realtime/supabase';
 import "./whiteboard.css";
 
 const PREFIX = "meetboard-xyz-";
@@ -32,9 +34,14 @@ const MainStage = () => {
   const isRemoteUpdate = useRef(false);
   const lastSentVersionMap = useRef(new Map<string, number>());
   const remotePointers = useRef(new Map<string, any>());
+  const realtimeChannel = useRef<RealtimeChannel | null>(null);
 
   // If peer opens before SDK is ready, store the notification here and flush it when SDK is ready
-  const pendingNotification = useRef<{ peerId: string; pinValue: string } | null>(null);
+  const pendingNotification = useRef<{
+    peerId: string;
+    pinValue: string;
+    realtimeInvite?: { boardId: string; inviteToken: string };
+  } | null>(null);
 
   // --- 1. Meet SDK Init ---
   useEffect(() => {
@@ -61,13 +68,17 @@ const MainStage = () => {
   }, []);
 
   // --- Notify side panel helper ---
-  const notifySidePanel = async (peerId: string, pinValue: string) => {
+  const notifySidePanel = async (
+    peerId: string,
+    pinValue: string,
+    realtimeInvite?: { boardId: string; inviteToken: string },
+  ) => {
     if (!mainStageClient.current) {
       console.warn('[MainStage] notifySidePanel: mainStageClient not ready yet — queuing for when SDK is ready');
-      pendingNotification.current = { peerId, pinValue };
+      pendingNotification.current = { peerId, pinValue, realtimeInvite };
       return;
     }
-    const message = { action: "pin", prefix: PREFIX, value: pinValue, peerId };
+    const message = { action: "pin", prefix: PREFIX, value: pinValue, peerId, ...realtimeInvite };
     console.log('[MainStage] Calling notifySidePanel with message:', message);
     try {
       await mainStageClient.current.notifySidePanel(JSON.stringify(message));
@@ -81,9 +92,9 @@ const MainStage = () => {
   useEffect(() => {
     if (sdkReady && pendingNotification.current) {
       console.log('[MainStage] SDK now ready — flushing pending notifySidePanel');
-      const { peerId, pinValue } = pendingNotification.current;
+      const { peerId, pinValue, realtimeInvite } = pendingNotification.current;
       pendingNotification.current = null;
-      notifySidePanel(peerId, pinValue);
+      notifySidePanel(peerId, pinValue, realtimeInvite);
     }
   }, [sdkReady]);
 
@@ -207,6 +218,18 @@ const MainStage = () => {
     console.log('[MainStage] Creating peer with ID:', peerId);
     console.log('[MainStage] SDK ready at this moment?', !!mainStageClient.current);
 
+    let realtimeInvite: { boardId: string; inviteToken: string } | undefined;
+    try {
+      await realtimeChannel.current?.unsubscribe();
+      realtimeChannel.current = null;
+      const session = await createRealtimeSession();
+      realtimeChannel.current = await joinPrivateBoardChannel(session.channelName);
+      realtimeInvite = { boardId: session.boardId, inviteToken: session.participantInviteToken };
+      console.log('[MainStage] Private Supabase channel ready');
+    } catch (error) {
+      console.error('[MainStage] Private Supabase setup failed; PeerJS remains available:', error);
+    }
+
     let iceServers = [];
     try {
       const iceResponse = await fetch('/api/get-ice-servers');
@@ -231,7 +254,7 @@ const MainStage = () => {
       console.log('[MainStage] ✓ Peer open with ID:', id);
       console.log('[MainStage] mainStageClient available now?', !!mainStageClient.current);
       setPeerReady(true);
-      await notifySidePanel(id, newPin);
+      await notifySidePanel(id, newPin, realtimeInvite);
     });
 
     peer.on('connection', setupConnection);
@@ -246,7 +269,10 @@ const MainStage = () => {
   };
 
   useEffect(() => {
-    return () => { peerInstance.current?.destroy(); };
+    return () => {
+      peerInstance.current?.destroy();
+      void realtimeChannel.current?.unsubscribe();
+    };
   }, []);
 
   if (isLobby) {

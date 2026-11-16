@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { meet } from '@googleworkspace/meet-addons';
+import { QRCodeSVG } from 'qrcode.react';
 
 const SidePanel = () => {
   const APP_VERSION = '{{VITE_APP_VERSION}}';
@@ -7,6 +8,8 @@ const SidePanel = () => {
   const [pin, setPin] = useState<string | null>(null);
   const [prefix, setPrefix] = useState<string | null>(null);
   const [peerId, setPeerId] = useState<string | null>(null);
+  const [boardId, setBoardId] = useState<string | null>(null);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,6 +34,8 @@ const SidePanel = () => {
             setPin(receivedMessage.value);
             setPrefix(receivedMessage.prefix);
             setPeerId(receivedMessage.peerId);
+            setBoardId(receivedMessage.boardId ?? null);
+            setInviteToken(receivedMessage.inviteToken ?? null);
           }
         });
 
@@ -76,7 +81,23 @@ const SidePanel = () => {
         <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center my-2 flex flex-col items-center gap-3">
           <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Session PIN</span>
           <div className="bg-white p-2 rounded-md shadow-sm border border-slate-100">
-            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}/mobile.html?v=${APP_VERSION}&peerId=${peerId}`)}`} alt="QR" className="h-30 w-30" />
+            {peerId && boardId && inviteToken ? (
+              <QRCodeSVG
+                value={`${window.location.origin}/mobile.html?${new URLSearchParams({ v: APP_VERSION, peerId, boardId })}#${new URLSearchParams({ inviteToken })}`}
+                size={120}
+                level="M"
+                marginSize={2}
+                aria-label="Scan to join this board"
+              />
+            ) : peerId ? (
+              <QRCodeSVG
+                value={`${window.location.origin}/mobile.html?${new URLSearchParams({ v: APP_VERSION, peerId })}`}
+                size={120}
+                level="M"
+                marginSize={2}
+                aria-label="Scan to join this board with PeerJS"
+              />
+            ) : null}
           </div>
           <span className="text-2xl font-mono font-bold text-[#1a73e8] tracking-[0.2em]">{pin}</span>
         </div>
