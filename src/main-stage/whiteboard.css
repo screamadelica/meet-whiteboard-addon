@@ -60,6 +60,17 @@
   border-radius: 10px;
 }
 
+.whiteboard .main-stage-laser-button {
+  width: var(--lg-button-size, 2.25rem);
+  height: var(--lg-button-size, 2.25rem);
+  min-height: var(--lg-button-size, 2.25rem);
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Selected tool */
 .whiteboard .ToolIcon--selected {
   background: #4f46e5;

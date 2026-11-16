@@ -414,7 +414,8 @@ const MainStage = () => {
                   </button>
                 )}
                 <button
-                  className={`ToolIcon_type_button${isLaserTool ? ' ToolIcon--selected' : ''}`}
+                  type="button"
+                  className={`ToolIcon ToolIcon_type_button main-stage-laser-button${isLaserTool ? ' ToolIcon--selected' : ''}`}
                   title="Laser pointer"
                   aria-label="Laser pointer"
                   aria-pressed={isLaserTool}
