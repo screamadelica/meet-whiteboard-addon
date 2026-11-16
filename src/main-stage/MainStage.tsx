@@ -22,7 +22,6 @@ const MainStage = () => {
   } as React.CSSProperties;
   
   const [pin, setPin] = useState<string>('');
-  const [isLobby, setIsLobby] = useState(true);
   const [peerReady, setPeerReady] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [activeConnections, setActiveConnections] = useState<DataConnection[]>([]);
@@ -40,6 +39,7 @@ const MainStage = () => {
   const realtimeClients = useRef(new Set<string>());
   const stageClientId = useRef(createClientId());
   const seenMessages = useRef(new MessageDeduplicator());
+  const boardStarted = useRef(false);
 
   // If peer opens before SDK is ready, store the notification here and flush it when SDK is ready
   const pendingNotification = useRef<{
@@ -291,7 +291,6 @@ const MainStage = () => {
     }
 
     setPeerReady(false);
-    setIsLobby(false);
 
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     setPin(newPin);
@@ -368,22 +367,17 @@ const MainStage = () => {
   };
 
   useEffect(() => {
+    if (boardStarted.current) return;
+    boardStarted.current = true;
+    void handleCreateBoard();
+  }, []);
+
+  useEffect(() => {
     return () => {
       peerInstance.current?.destroy();
       void realtimeChannel.current?.unsubscribe();
     };
   }, []);
-
-  if (isLobby) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center bg-gray-100 gap-2">
-        <button onClick={handleCreateBoard} className="rounded bg-blue-600 px-6 py-2 text-white">
-          Create New Board
-        </button>
-        <p className="text-xs text-gray-400">SDK: {sdkReady ? '✓ ready' : '⏳ initializing...'}</p>
-      </div>  
-    );
-  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">

@@ -107,7 +107,7 @@ const SidePanel = () => {
             onClick={handleLaunch}
             disabled={!client}
             className={`w-full rounded px-4 py-3 text-sm font-semibold text-white transition-colors ${
-              client ? 'bg-[#1a73e8] hover:bg-[#1557b0]' : 'cursor-not-allowed bg-[#dadce0]'
+              client ? 'cursor-pointer bg-[#1a73e8] hover:bg-[#1557b0]' : 'cursor-not-allowed bg-[#dadce0]'
             }`}
           >
             {client ? 'Launch Main Stage' : 'Initializing...'}
