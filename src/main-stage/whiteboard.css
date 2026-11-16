@@ -30,6 +30,11 @@
 }
 
 
+/* Remote laser trails are filled from a pale hash-derived colour; force red. */
+.whiteboard .LaserToolOverlayCanvas path {
+  fill: #ff0000 !important;
+}
+
 /* Hide More tools  tool
 .whiteboard button[data-testid="dropdown-menu-button"] {
   display: none !important;

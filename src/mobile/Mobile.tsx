@@ -295,25 +295,25 @@ const MobileController = () => {
         <div style={{
           position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'auto',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(17, 24, 39, 0.92)', backdropFilter: 'blur(4px)',
-          WebkitBackdropFilter: 'blur(4px)', touchAction: 'manipulation',
+          background: 'linear-gradient(145deg, rgba(0, 174, 159, 0.97), rgba(0, 128, 145, 0.97))',
+          backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', touchAction: 'manipulation',
         }}>
           <button
             onPointerUp={handleStart}
             style={{
-              background: '#2563eb', color: 'white', border: 'none', borderRadius: '16px',
-              padding: '20px 40px', fontSize: '20px', fontWeight: 700,
-              boxShadow: '0 8px 32px rgba(37,99,235,0.4)', cursor: 'pointer',
+              background: '#ff5b55', color: '#ffffff', border: '2px solid #ffdc52', borderRadius: '16px',
+              padding: '20px 40px', fontSize: '20px', fontWeight: 800,
+              boxShadow: '0 8px 0 rgba(138, 50, 42, 0.35)', cursor: 'pointer',
               touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent', userSelect: 'none',
             }}
           >
             Start Drawing
           </button>
-          <p style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.6)', textAlign: 'center', padding: '0 24px' }}>
+          <p style={{ marginTop: 18, fontSize: 14, fontWeight: 600, color: '#fff7d1', textAlign: 'center', padding: '0 24px' }}>
             Tap to enable full screen mode
           </p>
           {/* Show peerId in UI for debugging */}
-          <p style={{ marginTop: 8, fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', padding: '0 24px', textAlign: 'center', wordBreak: 'break-all' }}>
+          <p style={{ marginTop: 8, fontSize: 10, color: 'rgba(255,255,255,0.72)', fontFamily: 'monospace', padding: '0 24px', textAlign: 'center', wordBreak: 'break-all' }}>
             Target: {targetPeerId ?? 'none'}
           </p>
         </div>
