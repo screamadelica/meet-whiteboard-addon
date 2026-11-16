@@ -41,11 +41,10 @@
   fill: #ff0000 !important;
 }
 
-/* Hide More tools  tool
+/* Hide the More tools dropdown; the laser control is available in the top-right toolbar area. */
 .whiteboard button[data-testid="dropdown-menu-button"] {
   display: none !important;
 }
-*/
 
 /* Hide style panel */
 .whiteboard.hide-style-panel .Island.App-menu__left {
