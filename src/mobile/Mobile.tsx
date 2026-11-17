@@ -14,13 +14,11 @@ const RETRY_DELAY_MS = 2000;
 const MobileController = () => {
   const [status, setStatus] = useState("Connecting...");
   const [realtimeStatus, setRealtimeStatus] = useState('');
-  const [isStarted, setIsStarted] = useState(false);
   const excalidrawAPI = useRef<any>(null);
   const isRemoteUpdate = useRef(false);
   const versionMap = useRef(new Map<string, number>());
   const sentElements = useRef(new Map<string, ExcalidrawElement>());
   const connectionRef = useRef<DataConnection | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const retryCount = useRef(0);
   const peerRef = useRef<Peer | null>(null);
   const realtimeChannel = useRef<RealtimeChannel | null>(null);
@@ -35,31 +33,6 @@ const MobileController = () => {
   const inviteToken = new URLSearchParams(window.location.hash.slice(1)).get('inviteToken');
 
   console.log('[Mobile] Page loaded. targetPeerId from URL:', targetPeerId);
-
-  const handleStart = useCallback(() => {
-    setIsStarted(true);
-    
-    // Add a tiny haptic pulse to make the button feel responsive on mobile
-    if (window.navigator.vibrate) {
-      window.navigator.vibrate(10);
-    }
-
-    const el = containerRef.current || document.documentElement;
-    if (el.requestFullscreen) {
-      el.requestFullscreen().catch(() => {});
-    } else if ((el as any).webkitRequestFullscreen) {
-      (el as any).webkitRequestFullscreen();
-    }
-    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-      document.documentElement.style.height = '110vh';
-      document.body.style.height = '110vh';
-      window.scrollTo(0, 1);
-      setTimeout(() => {
-        document.documentElement.style.height = '100dvh';
-        document.body.style.height = '100dvh';
-      }, 300);
-    }
-  }, []);
 
   const [isLandscape, setIsLandscape] = useState(false);
   const [stageRect, setStageRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -416,37 +389,8 @@ const MobileController = () => {
 
   return (
     <div
-      ref={containerRef}
       style={{ position: 'fixed', inset: 0, width: '100vw', height: '100dvh', overflow: 'hidden', background: 'white', pointerEvents: 'none' }}
     >
-      {!isStarted && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 9999, pointerEvents: 'auto',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          background: 'linear-gradient(145deg, rgba(0, 174, 159, 0.97), rgba(0, 128, 145, 0.97))',
-          backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', touchAction: 'manipulation',
-        }}>
-          <button
-            onPointerUp={handleStart}
-            style={{
-              background: '#ff5b55', color: '#ffffff', border: '2px solid #ffdc52', borderRadius: '16px',
-              padding: '20px 40px', fontSize: '20px', fontWeight: 800,
-              boxShadow: '0 8px 0 rgba(138, 50, 42, 0.35)', cursor: 'pointer',
-              touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent', userSelect: 'none',
-            }}
-          >
-            Start Drawing
-          </button>
-          <p style={{ marginTop: 18, fontSize: 14, fontWeight: 600, color: '#fff7d1', textAlign: 'center', padding: '0 24px' }}>
-            Tap to enable full screen mode
-          </p>
-          {/* Show peerId in UI for debugging */}
-          <p style={{ marginTop: 8, fontSize: 10, color: 'rgba(255,255,255,0.72)', fontFamily: 'monospace', padding: '0 24px', textAlign: 'center', wordBreak: 'break-all' }}>
-            Target: {targetPeerId ?? 'none'}
-          </p>
-        </div>
-      )}
-
       <div style={{
         display: isLandscape ? 'none' : 'block',
         position: 'absolute', top: 8, left: 8, zIndex: 50,
