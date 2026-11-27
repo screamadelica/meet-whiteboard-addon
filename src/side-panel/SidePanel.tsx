@@ -250,7 +250,7 @@ const SidePanel = () => {
 
   const tabs = [
     { id: 'launch' as const, label: 'Launch' },
-    { id: 'student' as const, label: 'Student QR' },
+    { id: 'student' as const, label: 'Mobile QR' },
   ];
 
   if (isTutorAuthCallback) {
@@ -358,7 +358,7 @@ const SidePanel = () => {
           aria-labelledby={`board-tab-${activeTab}`}
           className="flex flex-col items-center gap-3 py-2 text-center"
         >
-          <p className="m-0 text-sm font-medium">Scan with the student's mobile device</p>
+          <p className="m-0 text-sm font-medium">Scan with a mobile device</p>
           {mobileUrl && (
             <div className="rounded border border-slate-200 bg-white p-3">
               <QRCodeSVG
@@ -366,7 +366,7 @@ const SidePanel = () => {
                 size={180}
                 level="M"
                 marginSize={2}
-                aria-label="Student mobile board invite"
+                aria-label="Mobile board invite"
               />
             </div>
           )}
