@@ -24,6 +24,41 @@ export async function getAuthenticatedUser(supabase, request) {
   return data.user;
 }
 
+export function isGoogleUser(user) {
+  const providers = user?.app_metadata?.providers || [];
+  return Boolean(
+    user &&
+    !user.is_anonymous &&
+    user.email &&
+    user.email_confirmed_at &&
+    (user.app_metadata?.provider === 'google' || providers.includes('google'))
+  );
+}
+
+export async function findApprovedTutor(supabase, user) {
+  if (!isGoogleUser(user)) return null;
+
+  const email = user.email.trim().toLowerCase();
+  const pattern = email.replace(/[\\%_]/g, '\\$&');
+  const results = await Promise.all([
+    supabase.from('tutors').select('id, name, email, cal_email').ilike('email', pattern).limit(2),
+    supabase.from('tutors').select('id, name, email, cal_email').ilike('cal_email', pattern).limit(2),
+  ]);
+
+  for (const result of results) {
+    if (result.error) throw result.error;
+  }
+
+  const matches = new Map();
+  results.flatMap((result) => result.data || []).forEach((tutor) => {
+    if ([tutor.email, tutor.cal_email].some((value) => value?.trim().toLowerCase() === email)) {
+      matches.set(tutor.id, tutor);
+    }
+  });
+
+  return matches.size === 1 ? matches.values().next().value : null;
+}
+
 export function createInviteToken() {
   return randomBytes(32).toString('base64url');
 }

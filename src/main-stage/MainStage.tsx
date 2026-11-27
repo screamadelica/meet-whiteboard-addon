@@ -23,6 +23,7 @@ const MainStage = () => {
   
   const [pin, setPin] = useState<string>('');
   const [peerReady, setPeerReady] = useState(false);
+  const [boardStartupError, setBoardStartupError] = useState('');
   const [sdkReady, setSdkReady] = useState(false);
   const [activeConnections, setActiveConnections] = useState<DataConnection[]>([]);
   const [showStyles, setShowStyles] = useState(false);
@@ -294,6 +295,7 @@ const MainStage = () => {
     }
 
     setPeerReady(false);
+    setBoardStartupError('');
 
     const newPin = Math.floor(1000 + Math.random() * 9000).toString();
     setPin(newPin);
@@ -329,6 +331,11 @@ const MainStage = () => {
       console.log('[MainStage] Private Supabase channel ready');
     } catch (error) {
       console.error('[MainStage] Private Supabase setup failed; PeerJS remains available:', error);
+      const status = (error as Error & { status?: number }).status;
+      if (status === 401 || status === 403) {
+        setBoardStartupError((error as Error).message);
+        return;
+      }
     }
 
     let iceServers = [];
@@ -426,7 +433,7 @@ const MainStage = () => {
     <div className="flex h-screen flex-col overflow-hidden">
       {!peerReady && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80">
-          <p className="text-gray-500 text-sm">Starting board...</p>
+          <p className="text-gray-500 text-sm">{boardStartupError || 'Starting board...'}</p>
         </div>
       )}
       <div className="relative flex-1">

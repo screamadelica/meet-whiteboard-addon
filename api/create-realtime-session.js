@@ -1,4 +1,4 @@
-import { createAdminClient, createBoardCredentials, getAuthenticatedUser } from '../server/realtime-auth.js';
+import { createAdminClient, createBoardCredentials, findApprovedTutor, getAuthenticatedUser } from '../server/realtime-auth.js';
 
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
@@ -8,7 +8,10 @@ export default async function handler(request, response) {
   try {
     const supabase = createAdminClient();
     const user = await getAuthenticatedUser(supabase, request);
-    if (!user) return response.status(401).json({ error: 'Supabase sign-in required' });
+    if (!user) return response.status(401).json({ error: 'Google sign-in required' });
+
+    const tutor = await findApprovedTutor(supabase, user);
+    if (!tutor) return response.status(403).json({ error: 'This Google account is not approved as a tutor' });
 
     const credentials = createBoardCredentials();
     const { error } = await supabase.from('board_sessions').insert({

@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { meet } from '@googleworkspace/meet-addons';
 import { QRCodeSVG } from 'qrcode.react';
+import { checkTutorAccess, getSupabaseClient } from '../realtime/supabase';
+
+type TutorAuthStatus = 'checking' | 'signed-out' | 'checking-approval' | 'approved' | 'not-approved' | 'error';
 
 const SidePanel = () => {
   const APP_VERSION = '{{VITE_APP_VERSION}}';
@@ -11,6 +14,9 @@ const SidePanel = () => {
   const [tutorInviteToken, setTutorInviteToken] = useState<string | null>(null);
   const [studentInviteToken, setStudentInviteToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'launch' | 'tutor' | 'student'>('launch');
+  const [tutorAuthStatus, setTutorAuthStatus] = useState<TutorAuthStatus>('checking');
+  const [tutorEmail, setTutorEmail] = useState<string | null>(null);
+  const [authMessage, setAuthMessage] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +58,106 @@ const SidePanel = () => {
     };
 
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const supabase = getSupabaseClient();
+
+    const refreshTutorAccess = async (session?: any) => {
+      try {
+        let currentSession = session;
+        if (currentSession === undefined) {
+          const result = await supabase.auth.getSession();
+          if (result.error) throw result.error;
+          currentSession = result.data.session;
+        }
+
+        if (!currentSession?.user || currentSession.user.is_anonymous) {
+          if (active) {
+            setTutorEmail(null);
+            setTutorAuthStatus('signed-out');
+          }
+          return;
+        }
+
+        if (active) {
+          setTutorEmail(currentSession.user.email ?? null);
+          setTutorAuthStatus('checking-approval');
+        }
+        await checkTutorAccess(currentSession.access_token);
+        if (active) {
+          setTutorAuthStatus('approved');
+          setAuthMessage('');
+        }
+      } catch (error) {
+        const status = (error as Error & { status?: number }).status;
+        if (active) {
+          if (status === 401) {
+            setTutorEmail(null);
+            setTutorAuthStatus('signed-out');
+          } else if (status === 403) {
+            setTutorAuthStatus('not-approved');
+            setAuthMessage('This Google account is not listed as an approved tutor.');
+          } else {
+            setTutorAuthStatus('error');
+            setAuthMessage('Could not verify tutor access. Check your connection and try again.');
+          }
+        }
+      }
+    };
+
+    void refreshTutorAccess();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      void refreshTutorAccess(session);
+    });
+    const onPopupMessage = (event: MessageEvent) => {
+      if (event.origin === window.location.origin && event.data?.type === 'meet-tutor-auth-complete') {
+        void refreshTutorAccess();
+      }
+    };
+    window.addEventListener('message', onPopupMessage);
+
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('tutor_auth_complete') === '1' && window.opener) {
+      void refreshTutorAccess().finally(() => {
+        window.opener?.postMessage({ type: 'meet-tutor-auth-complete' }, window.location.origin);
+        window.close();
+      });
+    }
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+      window.removeEventListener('message', onPopupMessage);
+    };
+  }, []);
+
+  const handleTutorSignIn = async () => {
+    const popup = window.open('about:blank', 'meet-tutor-google-signin', 'popup,width=520,height=680');
+    if (!popup) {
+      setAuthMessage('Allow pop-ups for this site, then try signing in again.');
+      return;
+    }
+
+    setTutorAuthStatus('checking');
+    setAuthMessage('');
+    try {
+      const { data, error } = await getSupabaseClient().auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/side-panel.html?tutor_auth_complete=1`,
+          skipBrowserRedirect: true,
+          queryParams: { prompt: 'select_account' },
+        },
+      });
+      if (error || !data.url) throw error || new Error('Supabase did not return a Google sign-in URL');
+      popup.location.href = data.url;
+    } catch (error) {
+      popup.close();
+      setTutorAuthStatus('error');
+      setAuthMessage((error as Error).message || 'Could not start Google sign-in.');
+    }
+  };
 
   const handleLaunch = async () => {
     if (client) {
@@ -103,14 +209,35 @@ const SidePanel = () => {
       {activeTab === 'launch' && (
         <section id="board-panel-launch" role="tabpanel" aria-labelledby="board-tab-launch" className="flex flex-col gap-3">
           <p className="m-0 text-sm leading-5">Start the shared board, then open a role tab to pair each mobile device.</p>
+          {tutorAuthStatus === 'approved' ? (
+            <p className="m-0 text-xs text-emerald-700">Tutor verified{tutorEmail ? `: ${tutorEmail}` : ''}</p>
+          ) : (
+            <div className="flex flex-col gap-2 rounded border border-slate-200 p-3">
+              <p className="m-0 text-xs leading-4 text-slate-600">
+                {tutorAuthStatus === 'checking' || tutorAuthStatus === 'checking-approval'
+                  ? 'Checking tutor access...'
+                  : 'Sign in with an approved tutor Google account to create a board.'}
+              </p>
+              {tutorAuthStatus !== 'checking' && tutorAuthStatus !== 'checking-approval' && (
+                <button
+                  type="button"
+                  onClick={handleTutorSignIn}
+                  className="cursor-pointer rounded border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Sign in with Google
+                </button>
+              )}
+              {authMessage && <p role="status" className="m-0 text-xs text-rose-700">{authMessage}</p>}
+            </div>
+          )}
           <button
             onClick={handleLaunch}
-            disabled={!client}
+            disabled={!client || tutorAuthStatus !== 'approved'}
             className={`w-full rounded px-4 py-3 text-sm font-semibold text-white transition-colors ${
-              client ? 'cursor-pointer bg-[#1a73e8] hover:bg-[#1557b0]' : 'cursor-not-allowed bg-[#dadce0]'
+              client && tutorAuthStatus === 'approved' ? 'cursor-pointer bg-[#1a73e8] hover:bg-[#1557b0]' : 'cursor-not-allowed bg-[#dadce0]'
             }`}
           >
-            {client ? 'Launch Main Stage' : 'Initializing...'}
+            {!client ? 'Initializing Meet...' : tutorAuthStatus === 'approved' ? 'Launch Main Stage' : 'Tutor sign-in required'}
           </button>
           {pin && (
             <div className="flex items-center justify-between border-t border-slate-200 pt-3">

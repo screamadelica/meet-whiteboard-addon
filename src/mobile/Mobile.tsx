@@ -252,48 +252,62 @@ const MobileController = () => {
   }, [applyIncomingMessage, activateRealtimeFallback]);
 
   useEffect(() => {
-    if (!targetPeerId) {
-      console.error('[Mobile] No peerId in URL params. Full URL:', window.location.href);
-      setStatus("❌ No peer ID in URL");
+    if (!targetPeerId || !targetBoardId || !inviteToken) {
+      console.error('[Mobile] Missing peerId or board invite in URL');
+      setStatus("❌ A valid board invite is required");
       return;
     }
 
+    let cancelled = false;
     const initPeer = async () => {
       try {
-        if (targetBoardId && inviteToken) {
-          try {
-            const board = await redeemRealtimeInvite(targetBoardId, inviteToken);
-            let probeTimeout: number | undefined;
-            const channel = await joinPrivateBoardChannel(board.channelName, (message) => {
-              if (message.action === 'realtime-probe-ack') {
-                if (probeTimeout) window.clearTimeout(probeTimeout);
-                realtimeAvailable.current = true;
-                setRealtimeStatus(connectionRef.current?.open ? 'PeerJS active; Realtime ready' : 'Realtime fallback ready');
-                console.log('[Mobile] Supabase Broadcast probe verified');
-              } else {
-                applyIncomingMessage(message);
-              }
-            });
-            realtimeChannel.current = channel;
-            setRealtimeStatus('Testing private Broadcast...');
-            probeTimeout = window.setTimeout(() => {
-              realtimeAvailable.current = false;
-              realtimeReady.current = false;
-              setRealtimeStatus('Broadcast response timed out');
-            }, 5000);
-            const sendStatus = await sendPrivateBoardMessage(channel, { action: 'realtime-probe' });
-            if (sendStatus !== 'ok') {
-              realtimeAvailable.current = false;
-              realtimeReady.current = false;
-              window.clearTimeout(probeTimeout);
-              setRealtimeStatus(`Broadcast send ${sendStatus}`);
-            }
-          } catch (error) {
-            setRealtimeStatus('Private channel unavailable');
-            console.error('[Mobile] Private Supabase setup failed; PeerJS remains available:', error);
-          }
+        let board: { channelName: string };
+        try {
+          board = await redeemRealtimeInvite(targetBoardId, inviteToken);
+        } catch (error) {
+          if (cancelled) return;
+          setStatus('❌ Board invite is invalid or expired');
+          setRealtimeStatus('Board invite required');
+          console.error('[Mobile] Board invite redemption failed:', error);
+          return;
         }
 
+        try {
+          let probeTimeout: number | undefined;
+          const channel = await joinPrivateBoardChannel(board.channelName, (message) => {
+            if (message.action === 'realtime-probe-ack') {
+              if (probeTimeout) window.clearTimeout(probeTimeout);
+              realtimeAvailable.current = true;
+              setRealtimeStatus(connectionRef.current?.open ? 'PeerJS active; Realtime ready' : 'Realtime fallback ready');
+              console.log('[Mobile] Supabase Broadcast probe verified');
+            } else {
+              applyIncomingMessage(message);
+            }
+          });
+          if (cancelled) {
+            void channel.unsubscribe();
+            return;
+          }
+          realtimeChannel.current = channel;
+          setRealtimeStatus('Testing private Broadcast...');
+          probeTimeout = window.setTimeout(() => {
+            realtimeAvailable.current = false;
+            realtimeReady.current = false;
+            setRealtimeStatus('Broadcast response timed out');
+          }, 5000);
+          const sendStatus = await sendPrivateBoardMessage(channel, { action: 'realtime-probe' });
+          if (sendStatus !== 'ok') {
+            realtimeAvailable.current = false;
+            realtimeReady.current = false;
+            window.clearTimeout(probeTimeout);
+            setRealtimeStatus(`Broadcast send ${sendStatus}`);
+          }
+        } catch (error) {
+          setRealtimeStatus('Private channel unavailable');
+          console.error('[Mobile] Private Supabase setup failed; PeerJS remains available:', error);
+        }
+
+        if (cancelled) return;
         console.log('[Mobile] Fetching ICE servers...');
         const iceResponse = await fetch('/api/get-ice-servers').catch(() => null);
         
@@ -303,6 +317,7 @@ const MobileController = () => {
 
         const iceData = await iceResponse.json();
         const iceServers = iceData.config?.iceServers || [];
+        if (cancelled) return;
 
         console.log('[Mobile] Initialising PeerJS with config...');
         const peer = new Peer({ config: { iceServers } });
@@ -329,10 +344,10 @@ const MobileController = () => {
       }
     };
 
-    initPeer();
+    void initPeer();
 
     return () => {
-      console.log('[Mobile] Cleaning up peer');
+      cancelled = true;
       peerRef.current?.destroy();
       void realtimeChannel.current?.unsubscribe();
     };
@@ -342,7 +357,6 @@ const MobileController = () => {
     if (isRemoteUpdate.current || (!realtimeReady.current && !connectionRef.current?.open)) return;
     const updates = elements.filter((el) => (versionMap.current.get(el.id) || -1) < el.version);
     updates.forEach((el) => sentElements.current.set(el.id, el));
-    // A pinch cancels the stroke it started and drops it from the scene without marking it deleted.
     const present = new Set(elements.map((el) => el.id));
     sentElements.current.forEach((el, id) => {
       if (present.has(id)) return;
@@ -359,7 +373,6 @@ const MobileController = () => {
   const onPointerUpdate = useMemo(() => throttle((payload: { pointer: { x: number; y: number; tool: string }; button: string }) => {
     if (!realtimeReady.current && !connectionRef.current?.open) return;
     const isLaser = payload.pointer.tool === 'laser';
-    // Hide the stage's laser once the phone leaves the laser tool.
     if (!isLaser && !wasLaser.current) return;
     wasLaser.current = isLaser;
     sendMobileMessage({
@@ -374,7 +387,6 @@ const MobileController = () => {
     excalidrawAPI.current?.setActiveTool({ type: 'freedraw' });
     versionMap.current.clear();
     sentElements.current.clear();
-    // A full (non-diff) empty scene is the only way to clear the main stage.
     sendMobileMessage({ action: 'scene-update', elements: [], isDiff: false });
   }, [sendMobileMessage]);
 

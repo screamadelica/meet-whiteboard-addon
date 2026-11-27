@@ -40,8 +40,8 @@ export async function getAnonymousAccessToken() {
   }
 }
 
-async function postAuthenticated(path: string, body: unknown) {
-  const accessToken = await getAnonymousAccessToken();
+async function postAuthenticated(path: string, body: unknown, suppliedAccessToken?: string) {
+  const accessToken = suppliedAccessToken || await getAnonymousAccessToken();
   const response = await fetch(path, {
     method: 'POST',
     headers: {
@@ -51,7 +51,11 @@ async function postAuthenticated(path: string, body: unknown) {
     body: JSON.stringify(body),
   });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || `Request failed (${response.status})`);
+  if (!response.ok) {
+    const error = new Error(result.error || `Request failed (${response.status})`) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
+  }
   return result;
 }
 
@@ -61,6 +65,10 @@ export function createRealtimeSession() {
 
 export function redeemRealtimeInvite(boardId: string, inviteToken: string) {
   return postAuthenticated('/api/redeem-realtime-invite', { boardId, inviteToken });
+}
+
+export function checkTutorAccess(accessToken: string) {
+  return postAuthenticated('/api/check-tutor-access', {}, accessToken);
 }
 
 export type BoardRealtimeMessage = {
