@@ -17,6 +17,7 @@ const SidePanel = () => {
   const [tutorAuthStatus, setTutorAuthStatus] = useState<TutorAuthStatus>('checking');
   const [tutorEmail, setTutorEmail] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState('');
+  const [launchMessage, setLaunchMessage] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -160,10 +161,15 @@ const SidePanel = () => {
   };
 
   const handleLaunch = async () => {
-    if (client) {
+    if (!client || tutorAuthStatus !== 'approved') return;
+    setLaunchMessage('');
+    try {
       await client.startActivity({
         mainStageUrl: `${window.location.origin}/main-stage.html`
       });
+    } catch (error) {
+      console.error('[SidePanel] Could not launch Meet board:', error);
+      setLaunchMessage((error as Error).message || 'Meet could not start the board. Try reopening the add-on.');
     }
   };
 
@@ -239,6 +245,7 @@ const SidePanel = () => {
           >
             {!client ? 'Initializing Meet...' : tutorAuthStatus === 'approved' ? 'Launch Main Stage' : 'Tutor sign-in required'}
           </button>
+          {launchMessage && <p role="alert" className="m-0 text-xs text-rose-700">{launchMessage}</p>}
           {pin && (
             <div className="flex items-center justify-between border-t border-slate-200 pt-3">
               <span className="text-xs font-medium text-slate-500">Session PIN</span>
