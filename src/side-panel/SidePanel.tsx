@@ -21,6 +21,7 @@ const SidePanel = () => {
   const [launchMessage, setLaunchMessage] = useState('');
   const [authCallbackStatus, setAuthCallbackStatus] = useState<TutorCheckResult | 'checking' | null>(null);
   const [authCallbackMessage, setAuthCallbackMessage] = useState('');
+  const tutorAuthPopup = React.useRef<Window | null>(null);
   const isTutorAuthCallback = new URLSearchParams(window.location.search).get('tutor_auth_complete') === '1';
 
   useEffect(() => {
@@ -119,7 +120,7 @@ const SidePanel = () => {
 
     if (isTutorAuthCallback) {
       setAuthCallbackStatus('checking');
-      void refreshTutorAccess().then((result) => {
+      void refreshTutorAccess().then(async (result) => {
         if (!active) return;
         const message = result === 'approved'
           ? 'Google sign-in succeeded and this account is approved as a tutor.'
@@ -131,10 +132,15 @@ const SidePanel = () => {
         setAuthCallbackStatus(result);
         setAuthCallbackMessage(message);
         if (window.opener && !window.opener.closed) {
+          const { data: sessionData } = await supabase.auth.getSession();
           window.opener.postMessage({
             type: 'meet-tutor-auth-complete',
             status: result,
             message,
+            session: sessionData.session ? {
+              access_token: sessionData.session.access_token,
+              refresh_token: sessionData.session.refresh_token,
+            } : null,
           }, window.location.origin);
         }
       });
@@ -145,20 +151,30 @@ const SidePanel = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isTutorAuthCallback) void refreshTutorAccess(session);
     });
-    const onPopupMessage = (event: MessageEvent) => {
-      if (event.origin === window.location.origin && event.data?.type === 'meet-tutor-auth-complete') {
-        if (event.data.status === 'approved') {
-          setTutorAuthStatus('checking-approval');
-          void refreshTutorAccess();
-        } else if (event.data.status === 'not-approved') {
-          setTutorAuthStatus('not-approved');
-          setAuthMessage(event.data.message || 'This Google account is not listed as an approved tutor.');
-        } else if (event.data.status === 'error') {
+    const onPopupMessage = async (event: MessageEvent) => {
+      if (
+        event.origin !== window.location.origin ||
+        event.source !== tutorAuthPopup.current ||
+        event.data?.type !== 'meet-tutor-auth-complete'
+      ) return;
+
+      if (event.data.status === 'approved' && event.data.session?.access_token && event.data.session?.refresh_token) {
+        setTutorAuthStatus('checking-approval');
+        const { data, error } = await supabase.auth.setSession(event.data.session);
+        if (error || !data.session) {
           setTutorAuthStatus('error');
-          setAuthMessage(event.data.message || 'Tutor verification failed.');
-        } else {
-          void refreshTutorAccess();
+          setAuthMessage(error?.message || 'Could not transfer the Google sign-in session to Meet.');
+          return;
         }
+        await refreshTutorAccess(data.session);
+      } else if (event.data.status === 'not-approved') {
+        setTutorAuthStatus('not-approved');
+        setAuthMessage(event.data.message || 'This Google account is not listed as an approved tutor.');
+      } else if (event.data.status === 'error') {
+        setTutorAuthStatus('error');
+        setAuthMessage(event.data.message || 'Tutor verification failed.');
+      } else {
+        void refreshTutorAccess();
       }
     };
     window.addEventListener('message', onPopupMessage);
@@ -176,6 +192,7 @@ const SidePanel = () => {
       setAuthMessage('Allow pop-ups for this site, then try signing in again.');
       return;
     }
+    tutorAuthPopup.current = popup;
 
     setTutorAuthStatus('checking');
     setAuthMessage('');
