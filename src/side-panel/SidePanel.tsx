@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { checkTutorAccess, getSupabaseClient } from '../realtime/supabase';
 
 type TutorAuthStatus = 'checking' | 'signed-out' | 'checking-approval' | 'approved' | 'not-approved' | 'error';
+type TutorCheckResult = 'approved' | 'signed-out' | 'not-approved' | 'error';
 
 const SidePanel = () => {
   const APP_VERSION = '{{VITE_APP_VERSION}}';
@@ -18,6 +19,9 @@ const SidePanel = () => {
   const [tutorEmail, setTutorEmail] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState('');
   const [launchMessage, setLaunchMessage] = useState('');
+  const [authCallbackStatus, setAuthCallbackStatus] = useState<TutorCheckResult | 'checking' | null>(null);
+  const [authCallbackMessage, setAuthCallbackMessage] = useState('');
+  const isTutorAuthCallback = new URLSearchParams(window.location.search).get('tutor_auth_complete') === '1';
 
   useEffect(() => {
     let cancelled = false;
@@ -64,7 +68,7 @@ const SidePanel = () => {
     let active = true;
     const supabase = getSupabaseClient();
 
-    const refreshTutorAccess = async (session?: any) => {
+    const refreshTutorAccess = async (session?: any): Promise<TutorCheckResult> => {
       try {
         let currentSession = session;
         if (currentSession === undefined) {
@@ -78,7 +82,7 @@ const SidePanel = () => {
             setTutorEmail(null);
             setTutorAuthStatus('signed-out');
           }
-          return;
+          return 'signed-out';
         }
 
         if (active) {
@@ -90,48 +94,81 @@ const SidePanel = () => {
           setTutorAuthStatus('approved');
           setAuthMessage('');
         }
+        return 'approved';
       } catch (error) {
         const status = (error as Error & { status?: number }).status;
         if (active) {
           if (status === 401) {
             setTutorEmail(null);
             setTutorAuthStatus('signed-out');
+            setAuthMessage('No Google sign-in session was found.');
+            return 'signed-out';
           } else if (status === 403) {
             setTutorAuthStatus('not-approved');
             setAuthMessage('This Google account is not listed as an approved tutor.');
+            return 'not-approved';
           } else {
             setTutorAuthStatus('error');
-            setAuthMessage('Could not verify tutor access. Check your connection and try again.');
+            setAuthMessage((error as Error).message || 'Could not verify tutor access.');
+            return 'error';
           }
         }
+        return 'error';
       }
     };
 
-    void refreshTutorAccess();
+    if (isTutorAuthCallback) {
+      setAuthCallbackStatus('checking');
+      void refreshTutorAccess().then((result) => {
+        if (!active) return;
+        const message = result === 'approved'
+          ? 'Google sign-in succeeded and this account is approved as a tutor.'
+          : result === 'not-approved'
+            ? 'Google sign-in succeeded, but this account is not approved as a tutor.'
+            : result === 'signed-out'
+              ? 'No Supabase session was found after Google sign-in. Try signing in again.'
+              : 'Tutor verification failed. Read the error below, then close this window when ready.';
+        setAuthCallbackStatus(result);
+        setAuthCallbackMessage(message);
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage({
+            type: 'meet-tutor-auth-complete',
+            status: result,
+            message,
+          }, window.location.origin);
+        }
+      });
+    } else {
+      void refreshTutorAccess();
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      void refreshTutorAccess(session);
+      if (!isTutorAuthCallback) void refreshTutorAccess(session);
     });
     const onPopupMessage = (event: MessageEvent) => {
       if (event.origin === window.location.origin && event.data?.type === 'meet-tutor-auth-complete') {
-        void refreshTutorAccess();
+        if (event.data.status === 'approved') {
+          setTutorAuthStatus('checking-approval');
+          void refreshTutorAccess();
+        } else if (event.data.status === 'not-approved') {
+          setTutorAuthStatus('not-approved');
+          setAuthMessage(event.data.message || 'This Google account is not listed as an approved tutor.');
+        } else if (event.data.status === 'error') {
+          setTutorAuthStatus('error');
+          setAuthMessage(event.data.message || 'Tutor verification failed.');
+        } else {
+          void refreshTutorAccess();
+        }
       }
     };
     window.addEventListener('message', onPopupMessage);
-
-    const query = new URLSearchParams(window.location.search);
-    if (query.get('tutor_auth_complete') === '1' && window.opener) {
-      void refreshTutorAccess().finally(() => {
-        window.opener?.postMessage({ type: 'meet-tutor-auth-complete' }, window.location.origin);
-        window.close();
-      });
-    }
 
     return () => {
       active = false;
       subscription.unsubscribe();
       window.removeEventListener('message', onPopupMessage);
     };
-  }, []);
+  }, [isTutorAuthCallback]);
 
   const handleTutorSignIn = async () => {
     const popup = window.open('about:blank', 'meet-tutor-google-signin', 'popup,width=520,height=680');
@@ -184,6 +221,33 @@ const SidePanel = () => {
     { id: 'tutor' as const, label: 'Tutor QR' },
     { id: 'student' as const, label: 'Student QR' },
   ];
+
+  if (isTutorAuthCallback) {
+    const callbackTitle = authCallbackStatus === 'approved'
+      ? 'Tutor sign-in complete'
+      : authCallbackStatus === 'not-approved'
+        ? 'Tutor account not approved'
+        : authCallbackStatus === 'signed-out'
+          ? 'Sign-in session missing'
+          : authCallbackStatus === 'error'
+            ? 'Could not verify tutor access'
+            : 'Checking tutor access...';
+
+    return (
+      <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-4 p-6 font-sans text-[#3c4043]">
+        <h1 className="m-0 text-xl font-semibold">{callbackTitle}</h1>
+        <p className="m-0 text-sm leading-5 text-slate-600">{authCallbackMessage || 'Waiting for Supabase to confirm your Google session.'}</p>
+        {authMessage && <pre className="m-0 whitespace-pre-wrap break-words rounded border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">{authMessage}</pre>}
+        <button
+          type="button"
+          onClick={() => window.close()}
+          className="cursor-pointer rounded bg-[#1a73e8] px-4 py-3 text-sm font-semibold text-white hover:bg-[#1557b0]"
+        >
+          Close this window
+        </button>
+      </main>
+    );
+  }
 
   return (
     <div className="p-4 flex flex-col gap-3 text-[#3c4043] font-sans">
