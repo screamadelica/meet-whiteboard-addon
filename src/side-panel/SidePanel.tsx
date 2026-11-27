@@ -232,6 +232,7 @@ const SidePanel = () => {
         additionalData: JSON.stringify({
           boardId: board.boardId,
           studentInviteToken: board.studentInviteToken,
+          expiresAt: board.expiresAt,
         }),
       });
     } catch (error) {

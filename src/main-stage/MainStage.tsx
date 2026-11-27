@@ -4,12 +4,14 @@ import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
 import Peer, { DataConnection } from 'peerjs';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { QRCodeSVG } from 'qrcode.react';
 import throttle from 'lodash.throttle';
 import { joinPrivateBoardChannel, redeemRealtimeInvite, sendPrivateBoardMessage } from '../realtime/supabase';
 import { createBoardMessage, createClientId, MessageDeduplicator, normalizeBoardMessage, type BoardMessage } from '../realtime/protocol';
 import "./whiteboard.css";
 
 const PREFIX = "meetboard-xyz-";
+const APP_VERSION = '{{VITE_APP_VERSION}}';
 
 const MainStage = () => {
   const themeOverrides = {
@@ -29,6 +31,8 @@ const MainStage = () => {
   const [showStyles, setShowStyles] = useState(false);
   const [isDrawTool, setIsDrawTool] = useState(false);  
   const [isLaserTool, setIsLaserTool] = useState(false);
+  const [showMobileInvite, setShowMobileInvite] = useState(false);
+  const [boardPeerId, setBoardPeerId] = useState<string | null>(null);
 
   const excalidrawAPI = useRef<any>(null);
   const whiteboardRef = useRef<HTMLDivElement>(null);
@@ -39,7 +43,7 @@ const MainStage = () => {
   const lastSentVersionMap = useRef(new Map<string, number>());
   const remotePointers = useRef(new Map<string, any>());
   const realtimeChannel = useRef<RealtimeChannel | null>(null);
-  const startingBoardInvite = useRef<{ boardId: string; inviteToken: string } | null>(null);
+  const startingBoardInvite = useRef<{ boardId: string; inviteToken: string; expiresAt: string } | null>(null);
   const activeConnectionsRef = useRef<DataConnection[]>([]);
   const realtimeClients = useRef(new Set<string>());
   const stageClientId = useRef(createClientId());
@@ -69,13 +73,18 @@ const MainStage = () => {
         mainStageClient.current = await session.createMainStageClient();
         const activityState = await mainStageClient.current.getActivityStartingState();
         const startingData = JSON.parse(activityState.additionalData || '{}');
-        if (typeof startingData.boardId !== 'string' || typeof startingData.studentInviteToken !== 'string') {
+        if (
+          typeof startingData.boardId !== 'string' ||
+          typeof startingData.studentInviteToken !== 'string' ||
+          typeof startingData.expiresAt !== 'string'
+        ) {
           setBoardStartupError('No board invite was provided. Close this activity and launch it again from the Meet side panel.');
           return;
         }
         startingBoardInvite.current = {
           boardId: startingData.boardId,
           inviteToken: startingData.studentInviteToken,
+          expiresAt: startingData.expiresAt,
         };
         console.log('[MainStage] ✓ mainStageClient ready');
         setSdkReady(true);
@@ -168,7 +177,7 @@ const MainStage = () => {
     }
 
     if (message.action === 'show-area' && excalidrawAPI.current) {
-      const { x, y, width, height } = message.rect;
+      const { x, y, width, height } = message.rect as { x: number; y: number; width: number; height: number };
       const app = excalidrawAPI.current.getAppState();
       const zoom = Math.min(app.width / width, app.height / height);
       excalidrawAPI.current.updateScene({
@@ -192,7 +201,7 @@ const MainStage = () => {
         });
         nextElements = Array.from(map.values());
       } else {
-        nextElements = message.elements;
+        nextElements = message.elements as ExcalidrawElement[];
       }
       isRemoteUpdate.current = true;
       excalidrawAPI.current.updateScene({ elements: nextElements });
@@ -373,6 +382,7 @@ const MainStage = () => {
       console.log('[MainStage] mainStageClient available now?', !!mainStageClient.current);
       excalidrawAPI.current?.setActiveTool({ type: 'freedraw' });
       setPeerReady(true);
+      setBoardPeerId(id);
       await notifySidePanel(id, newPin, boardInvite.boardId);
     });
 
@@ -432,6 +442,17 @@ const MainStage = () => {
     };
   }, []);
 
+  const mobileInviteUrl = startingBoardInvite.current && boardPeerId
+    ? `${window.location.origin}/mobile.html?${new URLSearchParams({
+        v: APP_VERSION,
+        peerId: boardPeerId,
+        boardId: startingBoardInvite.current.boardId,
+      })}#${new URLSearchParams({ inviteToken: startingBoardInvite.current.inviteToken })}`
+    : '';
+  const mobileInviteExpiry = startingBoardInvite.current
+    ? new Date(startingBoardInvite.current.expiresAt).toLocaleString()
+    : '';
+
   useEffect(() => {
     return () => {
       peerInstance.current?.destroy();
@@ -474,6 +495,22 @@ const MainStage = () => {
                     <path d="M14 4V2M19 7l2-1M17 3l1-2" />
                   </svg>
                 </button>
+                <button
+                  type="button"
+                  className={`ToolIcon ToolIcon_type_button main-stage-laser-button${showMobileInvite ? ' ToolIcon--selected' : ''}`}
+                  title={showMobileInvite ? 'Hide mobile QR code' : 'Show mobile QR code'}
+                  aria-label={showMobileInvite ? 'Hide mobile QR code' : 'Show mobile QR code'}
+                  aria-pressed={showMobileInvite}
+                  disabled={!mobileInviteUrl}
+                  onClick={() => setShowMobileInvite((visible) => !visible)}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <path d="M14 14h3v3h-3zM20 14v2M20 20v1M17 20h-3" />
+                  </svg>
+                </button>
                 {isDrawTool && (
                   <button
                     className="ToolIcon_type_button"
@@ -487,6 +524,23 @@ const MainStage = () => {
               </div>
             )}
           />
+          {showMobileInvite && mobileInviteUrl && (
+            <section
+              aria-label="Mobile board invite"
+              style={{
+                position: 'absolute', top: 72, right: 16, zIndex: 30, width: 240,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                padding: 14, border: '1px solid #d1d5db', borderRadius: 8,
+                background: 'white', boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+              }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>Scan to join this board</span>
+              <QRCodeSVG value={mobileInviteUrl} size={200} level="M" marginSize={2} aria-label="Mobile board invite QR code" />
+              <span style={{ fontSize: 11, lineHeight: 1.4, textAlign: 'center', color: '#4b5563' }}>
+                Invite expires {mobileInviteExpiry}
+              </span>
+            </section>
+          )}
         </div>        
       </div>
     </div>
