@@ -27,6 +27,7 @@ const MainStage = () => {
   const [peerReady, setPeerReady] = useState(false);
   const [boardStartupError, setBoardStartupError] = useState('');
   const [sdkReady, setSdkReady] = useState(false);
+  const [isTutorStage, setIsTutorStage] = useState(false);
   const [activeConnections, setActiveConnections] = useState<DataConnection[]>([]);
   const [showStyles, setShowStyles] = useState(false);
   const [isDrawTool, setIsDrawTool] = useState(false);  
@@ -71,6 +72,8 @@ const MainStage = () => {
         if (cancelled) return;
         console.log('[MainStage] Session created, calling createMainStageClient...');
         mainStageClient.current = await session.createMainStageClient();
+        const frameOpenReason = await mainStageClient.current.getFrameOpenReason();
+        setIsTutorStage(frameOpenReason === 'START_ACTIVITY');
         const activityState = await mainStageClient.current.getActivityStartingState();
         const startingData = JSON.parse(activityState.additionalData || '{}');
         if (
@@ -479,6 +482,12 @@ const MainStage = () => {
               setIsLaserTool(appState.activeTool.type === "laser");
               throttledBroadcast(elements);
               throttledViewBroadcast(appState);
+            }}
+            UIOptions={{
+              canvasActions: {
+                loadScene: isTutorStage,
+                saveToActiveFile: isTutorStage,
+              },
             }}
             renderTopRightUI={() => (
               <div ref={toolbarControlsRef} className="main-stage-toolbar-controls">
