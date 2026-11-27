@@ -59,8 +59,8 @@ async function postAuthenticated(path: string, body: unknown, suppliedAccessToke
   return result;
 }
 
-export function createRealtimeSession() {
-  return postAuthenticated('/api/create-realtime-session', {});
+export function createRealtimeSession(accessToken?: string) {
+  return postAuthenticated('/api/create-realtime-session', {}, accessToken);
 }
 
 export function redeemRealtimeInvite(boardId: string, inviteToken: string) {

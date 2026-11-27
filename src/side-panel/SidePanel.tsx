@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { meet } from '@googleworkspace/meet-addons';
 import { QRCodeSVG } from 'qrcode.react';
-import { checkTutorAccess, getSupabaseClient } from '../realtime/supabase';
+import { checkTutorAccess, createRealtimeSession, getSupabaseClient } from '../realtime/supabase';
 
 type TutorAuthStatus = 'checking' | 'signed-out' | 'checking-approval' | 'approved' | 'not-approved' | 'error';
 type TutorCheckResult = 'approved' | 'signed-out' | 'not-approved' | 'error';
@@ -19,6 +19,7 @@ const SidePanel = () => {
   const [tutorEmail, setTutorEmail] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState('');
   const [launchMessage, setLaunchMessage] = useState('');
+  const [isLaunching, setIsLaunching] = useState(false);
   const [authCallbackStatus, setAuthCallbackStatus] = useState<TutorCheckResult | 'checking' | null>(null);
   const [authCallbackMessage, setAuthCallbackMessage] = useState('');
   const tutorAuthPopup = React.useRef<Window | null>(null);
@@ -46,9 +47,7 @@ const SidePanel = () => {
           if (receivedMessage.action === 'pin') {
             setPin(receivedMessage.value);
             setPeerId(receivedMessage.peerId);
-            setBoardId(receivedMessage.boardId ?? null);
-            setTutorInviteToken(receivedMessage.tutorInviteToken ?? null);
-            setStudentInviteToken(receivedMessage.studentInviteToken ?? null);
+            if (receivedMessage.boardId) setBoardId(receivedMessage.boardId);
           }
         });
 
@@ -215,15 +214,33 @@ const SidePanel = () => {
   };
 
   const handleLaunch = async () => {
-    if (!client || tutorAuthStatus !== 'approved') return;
+    if (!client || tutorAuthStatus !== 'approved' || isLaunching) return;
+    setIsLaunching(true);
     setLaunchMessage('');
     try {
+      const { data: sessionData, error: sessionError } = await getSupabaseClient().auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!sessionData.session || sessionData.session.user.is_anonymous) {
+        setTutorAuthStatus('signed-out');
+        throw new Error('Tutor sign-in expired. Sign in with Google again.');
+      }
+
+      const board = await createRealtimeSession(sessionData.session.access_token);
+      setBoardId(board.boardId);
+      setTutorInviteToken(board.tutorInviteToken);
+      setStudentInviteToken(board.studentInviteToken);
       await client.startActivity({
-        mainStageUrl: `${window.location.origin}/main-stage.html`
+        mainStageUrl: `${window.location.origin}/main-stage.html`,
+        additionalData: JSON.stringify({
+          boardId: board.boardId,
+          studentInviteToken: board.studentInviteToken,
+        }),
       });
     } catch (error) {
       console.error('[SidePanel] Could not launch Meet board:', error);
       setLaunchMessage((error as Error).message || 'Meet could not start the board. Try reopening the add-on.');
+    } finally {
+      setIsLaunching(false);
     }
   };
 
@@ -319,12 +336,12 @@ const SidePanel = () => {
           )}
           <button
             onClick={handleLaunch}
-            disabled={!client || tutorAuthStatus !== 'approved'}
+            disabled={!client || tutorAuthStatus !== 'approved' || isLaunching}
             className={`w-full rounded px-4 py-3 text-sm font-semibold text-white transition-colors ${
-              client && tutorAuthStatus === 'approved' ? 'cursor-pointer bg-[#1a73e8] hover:bg-[#1557b0]' : 'cursor-not-allowed bg-[#dadce0]'
+              client && tutorAuthStatus === 'approved' && !isLaunching ? 'cursor-pointer bg-[#1a73e8] hover:bg-[#1557b0]' : 'cursor-not-allowed bg-[#dadce0]'
             }`}
           >
-            {!client ? 'Initializing Meet...' : tutorAuthStatus === 'approved' ? 'Launch Main Stage' : 'Tutor sign-in required'}
+            {!client ? 'Initializing Meet...' : isLaunching ? 'Preparing board...' : tutorAuthStatus === 'approved' ? 'Launch Main Stage' : 'Tutor sign-in required'}
           </button>
           {launchMessage && <p role="alert" className="m-0 text-xs text-rose-700">{launchMessage}</p>}
           {pin && (

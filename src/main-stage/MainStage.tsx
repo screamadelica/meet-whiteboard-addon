@@ -5,7 +5,7 @@ import type { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/typ
 import Peer, { DataConnection } from 'peerjs';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import throttle from 'lodash.throttle';
-import { createRealtimeSession, joinPrivateBoardChannel, sendPrivateBoardMessage } from '../realtime/supabase';
+import { joinPrivateBoardChannel, redeemRealtimeInvite, sendPrivateBoardMessage } from '../realtime/supabase';
 import { createBoardMessage, createClientId, MessageDeduplicator, normalizeBoardMessage, type BoardMessage } from '../realtime/protocol';
 import "./whiteboard.css";
 
@@ -39,6 +39,7 @@ const MainStage = () => {
   const lastSentVersionMap = useRef(new Map<string, number>());
   const remotePointers = useRef(new Map<string, any>());
   const realtimeChannel = useRef<RealtimeChannel | null>(null);
+  const startingBoardInvite = useRef<{ boardId: string; inviteToken: string } | null>(null);
   const activeConnectionsRef = useRef<DataConnection[]>([]);
   const realtimeClients = useRef(new Set<string>());
   const stageClientId = useRef(createClientId());
@@ -49,7 +50,7 @@ const MainStage = () => {
   const pendingNotification = useRef<{
     peerId: string;
     pinValue: string;
-    realtimeInvite?: { boardId: string; tutorInviteToken: string; studentInviteToken: string };
+    boardId?: string;
   } | null>(null);
 
   // --- 1. Meet SDK Init ---
@@ -66,6 +67,16 @@ const MainStage = () => {
         if (cancelled) return;
         console.log('[MainStage] Session created, calling createMainStageClient...');
         mainStageClient.current = await session.createMainStageClient();
+        const activityState = await mainStageClient.current.getActivityStartingState();
+        const startingData = JSON.parse(activityState.additionalData || '{}');
+        if (typeof startingData.boardId !== 'string' || typeof startingData.studentInviteToken !== 'string') {
+          setBoardStartupError('No board invite was provided. Close this activity and launch it again from the Meet side panel.');
+          return;
+        }
+        startingBoardInvite.current = {
+          boardId: startingData.boardId,
+          inviteToken: startingData.studentInviteToken,
+        };
         console.log('[MainStage] ✓ mainStageClient ready');
         setSdkReady(true);
       } catch (e) {
@@ -80,14 +91,14 @@ const MainStage = () => {
   const notifySidePanel = async (
     peerId: string,
     pinValue: string,
-    realtimeInvite?: { boardId: string; tutorInviteToken: string; studentInviteToken: string },
+    boardId?: string,
   ) => {
     if (!mainStageClient.current) {
       console.warn('[MainStage] notifySidePanel: mainStageClient not ready yet — queuing for when SDK is ready');
-      pendingNotification.current = { peerId, pinValue, realtimeInvite };
+      pendingNotification.current = { peerId, pinValue, boardId };
       return;
     }
-    const message = { action: "pin", prefix: PREFIX, value: pinValue, peerId, ...realtimeInvite };
+    const message = { action: "pin", prefix: PREFIX, value: pinValue, peerId, boardId };
     console.log('[MainStage] Sending board invite details to side panel');
     try {
       await mainStageClient.current.notifySidePanel(JSON.stringify(message));
@@ -101,9 +112,9 @@ const MainStage = () => {
   useEffect(() => {
     if (sdkReady && pendingNotification.current) {
       console.log('[MainStage] SDK now ready — flushing pending notifySidePanel');
-      const { peerId, pinValue, realtimeInvite } = pendingNotification.current;
+      const { peerId, pinValue, boardId } = pendingNotification.current;
       pendingNotification.current = null;
-      notifySidePanel(peerId, pinValue, realtimeInvite);
+      notifySidePanel(peerId, pinValue, boardId);
     }
   }, [sdkReady]);
 
@@ -304,13 +315,17 @@ const MainStage = () => {
     console.log('[MainStage] Creating peer with ID:', peerId);
     console.log('[MainStage] SDK ready at this moment?', !!mainStageClient.current);
 
-    let realtimeInvite: { boardId: string; tutorInviteToken: string; studentInviteToken: string } | undefined;
+    const boardInvite = startingBoardInvite.current;
+    if (!boardInvite) {
+      setBoardStartupError('Board invite is missing. Close this activity and launch again from the Meet side panel.');
+      return;
+    }
     try {
       await realtimeChannel.current?.unsubscribe();
       realtimeChannel.current = null;
       realtimeClients.current.clear();
-      const session = await createRealtimeSession();
-      realtimeChannel.current = await joinPrivateBoardChannel(session.channelName, (message) => {
+      const membership = await redeemRealtimeInvite(boardInvite.boardId, boardInvite.inviteToken);
+      realtimeChannel.current = await joinPrivateBoardChannel(membership.channelName, (message) => {
         if (message.action === 'realtime-probe') {
           void sendPrivateBoardMessage(realtimeChannel.current!, { action: 'realtime-probe-ack' })
             .then((status) => {
@@ -323,11 +338,6 @@ const MainStage = () => {
           handleRealtimeMessage(message);
         }
       });
-      realtimeInvite = {
-        boardId: session.boardId,
-        tutorInviteToken: session.tutorInviteToken,
-        studentInviteToken: session.studentInviteToken,
-      };
       console.log('[MainStage] Private Supabase channel ready');
     } catch (error) {
       console.error('[MainStage] Private Supabase setup failed; PeerJS remains available:', error);
@@ -363,7 +373,7 @@ const MainStage = () => {
       console.log('[MainStage] mainStageClient available now?', !!mainStageClient.current);
       excalidrawAPI.current?.setActiveTool({ type: 'freedraw' });
       setPeerReady(true);
-      await notifySidePanel(id, newPin, realtimeInvite);
+      await notifySidePanel(id, newPin, boardInvite.boardId);
     });
 
     peer.on('connection', setupConnection);
@@ -378,10 +388,10 @@ const MainStage = () => {
   };
 
   useEffect(() => {
-    if (boardStarted.current) return;
+    if (!sdkReady || boardStarted.current) return;
     boardStarted.current = true;
     void handleCreateBoard();
-  }, []);
+  }, [sdkReady]);
 
   useEffect(() => {
     const root = whiteboardRef.current;
