@@ -46,6 +46,10 @@
   display: none !important;
 }
 
+.whiteboard .dropdown-menu > *:has(> .dropdown-menu-group-title) {
+  display: none !important;
+}
+
 /* Hide style panel */
 .whiteboard.hide-style-panel .Island.App-menu__left {
   display: none !important;
