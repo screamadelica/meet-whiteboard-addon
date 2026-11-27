@@ -46,7 +46,7 @@
   display: none !important;
 }
 
-.whiteboard .dropdown-menu > *:has(> .dropdown-menu-group-title) {
+.whiteboard .dropdown-menu > *:has(.dropdown-menu-group-title) {
   display: none !important;
 }
 
