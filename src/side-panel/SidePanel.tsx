@@ -1,19 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { meet } from '@googleworkspace/meet-addons';
-import { QRCodeSVG } from 'qrcode.react';
 import { checkTutorAccess, createRealtimeSession, getSupabaseClient } from '../realtime/supabase';
 
 type TutorAuthStatus = 'checking' | 'signed-out' | 'checking-approval' | 'approved' | 'not-approved' | 'error';
 type TutorCheckResult = 'approved' | 'signed-out' | 'not-approved' | 'error';
 
 const SidePanel = () => {
-  const APP_VERSION = '{{VITE_APP_VERSION}}';
   const [client, setClient] = useState<any>(null);
   const [pin, setPin] = useState<string | null>(null);
-  const [peerId, setPeerId] = useState<string | null>(null);
-  const [boardId, setBoardId] = useState<string | null>(null);
-  const [studentInviteToken, setStudentInviteToken] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'launch' | 'student'>('launch');
   const [tutorAuthStatus, setTutorAuthStatus] = useState<TutorAuthStatus>('checking');
   const [tutorEmail, setTutorEmail] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState('');
@@ -45,8 +39,6 @@ const SidePanel = () => {
           const receivedMessage = JSON.parse(arg.payload);
           if (receivedMessage.action === 'pin') {
             setPin(receivedMessage.value);
-            setPeerId(receivedMessage.peerId);
-            if (receivedMessage.boardId) setBoardId(receivedMessage.boardId);
           }
         });
 
@@ -225,8 +217,6 @@ const SidePanel = () => {
       }
 
       const board = await createRealtimeSession(sessionData.session.access_token);
-      setBoardId(board.boardId);
-      setStudentInviteToken(board.studentInviteToken);
       await client.startActivity({
         mainStageUrl: `${window.location.origin}/main-stage.html`,
         additionalData: JSON.stringify({
@@ -242,17 +232,6 @@ const SidePanel = () => {
       setIsLaunching(false);
     }
   };
-
-  const boardReady = !!(peerId && boardId && studentInviteToken);
-  const inviteToken = studentInviteToken;
-  const mobileUrl = boardReady && inviteToken
-    ? `${window.location.origin}/mobile.html?${new URLSearchParams({ v: APP_VERSION, peerId: peerId!, boardId: boardId! })}#${new URLSearchParams({ inviteToken })}`
-    : '';
-
-  const tabs = [
-    { id: 'launch' as const, label: 'Launch' },
-    { id: 'student' as const, label: 'Mobile QR' },
-  ];
 
   if (isTutorAuthCallback) {
     const callbackTitle = authCallbackStatus === 'approved'
@@ -284,33 +263,8 @@ const SidePanel = () => {
   return (
     <div className="p-4 flex flex-col gap-3 text-[#3c4043] font-sans">
       <h2 className="text-[18px] font-medium m-0">Tudraw Whiteboard Add-on</h2>
-      <div role="tablist" aria-label="Board setup" className="grid grid-cols-2 border-b border-slate-200">
-        {tabs.map((tab) => {
-          const disabled = tab.id !== 'launch' && !boardReady;
-          const selected = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              id={`board-tab-${tab.id}`}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              aria-controls={`board-panel-${tab.id}`}
-              disabled={disabled}
-              onClick={() => setActiveTab(tab.id)}
-              className={`border-b-2 px-2 py-2 text-xs font-medium transition-colors ${
-                selected ? 'border-[#1a73e8] text-[#1a73e8]' : 'border-transparent text-slate-600'
-              } ${disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-slate-50'}`}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {activeTab === 'launch' && (
-        <section id="board-panel-launch" role="tabpanel" aria-labelledby="board-tab-launch" className="flex flex-col gap-3">
-          <p className="m-0 text-sm leading-5">Start the shared board, then open a role tab to pair each mobile device.</p>
+      <section className="flex flex-col gap-3">
+          <p className="m-0 text-sm leading-5">Launch the shared board in the Meet main stage.</p>
           {tutorAuthStatus === 'approved' ? (
             <p className="m-0 text-xs text-emerald-700">Tutor verified{tutorEmail ? `: ${tutorEmail}` : ''}</p>
           ) : (
@@ -348,32 +302,7 @@ const SidePanel = () => {
               <span className="font-mono text-lg font-bold tracking-[0.16em] text-[#1a73e8]">{pin}</span>
             </div>
           )}
-          {pin && !boardReady && <p className="m-0 text-xs text-amber-700">Student QR code is not available for this session.</p>}
-        </section>
-      )}
-
-      {activeTab === 'student' && (
-        <section
-          id={`board-panel-${activeTab}`}
-          role="tabpanel"
-          aria-labelledby={`board-tab-${activeTab}`}
-          className="flex flex-col items-center gap-3 py-2 text-center"
-        >
-          <p className="m-0 text-sm font-medium">Scan with a mobile device</p>
-          {mobileUrl && (
-            <div className="rounded border border-slate-200 bg-white p-3">
-              <QRCodeSVG
-                value={mobileUrl}
-                size={180}
-                level="M"
-                marginSize={2}
-                aria-label="Mobile board invite"
-              />
-            </div>
-          )}
-          {pin && <span className="font-mono text-sm font-bold tracking-[0.16em] text-[#1a73e8]">PIN {pin}</span>}
-        </section>
-      )}
+      </section>
     </div>
   );
 };

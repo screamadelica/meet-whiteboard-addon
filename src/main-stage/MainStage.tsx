@@ -31,7 +31,7 @@ const MainStage = () => {
   const [showStyles, setShowStyles] = useState(false);
   const [isDrawTool, setIsDrawTool] = useState(false);  
   const [isLaserTool, setIsLaserTool] = useState(false);
-  const [showMobileInvite, setShowMobileInvite] = useState(false);
+  const [showMobileInvite, setShowMobileInvite] = useState(true);
   const [boardPeerId, setBoardPeerId] = useState<string | null>(null);
 
   const excalidrawAPI = useRef<any>(null);
